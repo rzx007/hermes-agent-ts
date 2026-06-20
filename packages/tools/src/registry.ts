@@ -53,7 +53,8 @@ export class ToolRegistry {
     try {
       return await def.handler(result.data, ctx);
     } catch (e) {
-      return `Error: 工具 "${name}" 执行失败: ${(e as Error).message}`;
+      const msg = e instanceof Error ? e.message : String(e);
+      return `Error: 工具 "${name}" 执行失败: ${msg}`;
     }
   }
 }

@@ -40,3 +40,28 @@ test('call 未知工具返回错误文本', async () => {
   const out = await makeRegistry().call('nope', '{}', ctx);
   expect(out.toLowerCase()).toContain('error');
 });
+
+test('call 在 handler 抛错时返回错误文本（含原因）', async () => {
+  const r = new ToolRegistry();
+  r.register({
+    name: 'boom', description: 'throws', toolset: 'core',
+    schema: z.object({}),
+    handler: async () => { throw new Error('炸了'); },
+  });
+  const out = await r.call('boom', '{}', ctx);
+  expect(out).toContain('Error');
+  expect(out).toContain('炸了');
+});
+
+test('call 在 handler 抛非 Error 值时也返回错误文本', async () => {
+  const r = new ToolRegistry();
+  r.register({
+    name: 'boom2', description: 'throws string', toolset: 'core',
+    schema: z.object({}),
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    handler: async () => { throw 'plain string error'; },
+  });
+  const out = await r.call('boom2', '{}', ctx);
+  expect(out).toContain('Error');
+  expect(out).toContain('plain string error');
+});
