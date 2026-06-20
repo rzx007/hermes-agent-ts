@@ -27,3 +27,17 @@ test('write_file 自动建父目录', async () => {
 test('read_file 不存在的文件由 handler 抛错（注册后由 registry 捕获）', async () => {
   await expect(readFileTool.handler({ path: 'nope.txt' }, ctx())).rejects.toThrow();
 });
+
+test('read_file 行号格式为 "n<tab>内容"', async () => {
+  await writeFileTool.handler({ path: 'c.txt', content: 'foo\nbar' }, ctx());
+  const out = await readFileTool.handler({ path: 'c.txt' }, ctx());
+  expect(out).toContain('1\tfoo');
+  expect(out).toContain('2\tbar');
+});
+
+test('read_file 超过 100KB 截断', async () => {
+  const big = 'x'.repeat(100 * 1024 + 500);
+  await writeFileTool.handler({ path: 'big.txt', content: big }, ctx());
+  const out = await readFileTool.handler({ path: 'big.txt' }, ctx());
+  expect(out).toContain('已截断');
+});

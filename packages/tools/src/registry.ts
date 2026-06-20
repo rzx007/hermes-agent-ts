@@ -58,3 +58,8 @@ export class ToolRegistry {
     }
   }
 }
+
+// 用于定义工具时保留 schema 的具体类型，让 handler 的 args 得到精确推断
+export function defineTool<T extends z.ZodTypeAny>(def: ToolDef<T>): ToolDef<T> {
+  return def;
+}
