@@ -1,0 +1,15 @@
+{
+  "name": "@hermes/tools",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": { "import": "./src/index.ts" } },
+  "scripts": { "build": "tsup src/index.ts --format esm --dts --clean" },
+  "dependencies": {
+    "@hermes/core": "workspace:*",
+    "@hermes/providers": "workspace:*",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.23.0"
+  }
+}
