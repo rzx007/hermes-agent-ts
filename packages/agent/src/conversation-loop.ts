@@ -34,6 +34,7 @@ export async function* runConversation(
 
   try {
     for (let iteration = 0; iteration < maxIterations; iteration++) {
+      if (ctx.signal?.aborted) { yield { type: 'error', error: '已中断' }; return; }
       // a. 流式调模型：边收边发 assistant_delta，同时缓存 chunk 供聚合
       const captured: CompletionChunk[] = [];
       for await (const chunk of provider.complete({ model, messages, tools, signal: ctx.signal })) {
@@ -60,6 +61,7 @@ export async function* runConversation(
 
       // e. 执行每个工具调用
       for (const call of result.toolCalls) {
+        if (ctx.signal?.aborted) { yield { type: 'error', error: '已中断' }; return; }
         yield { type: 'tool_call', name: call.name, args: call.arguments };
         const output = await registry.call(call.name, call.arguments, ctx);
         yield { type: 'tool_result', name: call.name, output };

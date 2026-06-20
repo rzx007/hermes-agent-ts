@@ -82,3 +82,51 @@ test('超过 maxIterations 产出 error', async () => {
   for await (const e of runConversation(deps, s.id, 'x', { cwd: '/', logger: createLogger('t') })) events.push(e);
   expect(events.at(-1)?.type).toBe('error');
 });
+
+test('provider 抛错时产出 error 事件', async () => {
+  const provider: Provider = {
+    name: 'mock',
+    // eslint-disable-next-line require-yield
+    async *complete() { throw new Error('网络炸了'); },
+    async aggregate(): Promise<CompletionResult> { return { content: null, toolCalls: [], finishReason: 'stop' }; },
+  };
+  const { db, deps } = makeDeps(provider);
+  const s = db.createSession();
+  const events: LoopEvent[] = [];
+  for await (const e of runConversation(deps, s.id, 'x', { cwd: '/', logger: createLogger('t') })) events.push(e);
+  const last = events.at(-1);
+  expect(last?.type).toBe('error');
+  expect(last && last.type === 'error' ? last.error : '').toContain('网络炸了');
+});
+
+test('单轮内多个工具调用按序执行并落库', async () => {
+  const provider = scriptedProvider([
+    [
+      { toolCallDelta: { index: 0, id: 'c1', name: 'read_file', argsDelta: '{"path":"a"}' } },
+      { toolCallDelta: { index: 1, id: 'c2', name: 'read_file', argsDelta: '{"path":"b"}' } },
+    ],
+    [{ contentDelta: '两个都读完了' }],
+  ]);
+  const { db, deps } = makeDeps(provider);
+  const s = db.createSession();
+  const events: LoopEvent[] = [];
+  for await (const e of runConversation(deps, s.id, '读 a 和 b', { cwd: '/', logger: createLogger('t') })) events.push(e);
+  const toolCalls = events.filter((e) => e.type === 'tool_call');
+  const toolResults = events.filter((e) => e.type === 'tool_result');
+  expect(toolCalls.length).toBe(2);
+  expect(toolResults.length).toBe(2);
+  expect(events.at(-1)?.type).toBe('turn_done');
+  // user + assistant(2 toolcalls) + tool + tool + assistant(final) = 5 条
+  expect(db.getMessages(s.id).length).toBe(5);
+});
+
+test('已中止的 signal 立即结束当前轮', async () => {
+  const provider = scriptedProvider([[{ contentDelta: 'hi' }]]);
+  const { db, deps } = makeDeps(provider);
+  const s = db.createSession();
+  const ac = new AbortController();
+  ac.abort();
+  const events: LoopEvent[] = [];
+  for await (const e of runConversation(deps, s.id, 'x', { cwd: '/', logger: createLogger('t'), signal: ac.signal })) events.push(e);
+  expect(events.at(-1)?.type).toBe('error');
+});
