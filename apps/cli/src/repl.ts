@@ -1,13 +1,20 @@
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import pc from 'picocolors';
-import type { SessionDB } from '@hermes/core';
 import { runConversation, type LoopDeps } from '@hermes/agent';
 import type { ToolContext } from '@hermes/tools';
 
-export async function repl(deps: LoopDeps, db: SessionDB, ctx: Omit<ToolContext, 'signal'>) {
+export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>) {
+  const { db } = deps;
   let session = db.createSession({ source: 'cli', modelConfig: { provider: deps.provider.name, model: deps.model } });
   const rl = readline.createInterface({ input: stdin, output: stdout });
+
+  rl.on('SIGINT', () => {
+    console.log(pc.yellow('\n退出 Hermes'));
+    db.endSession(session.id);
+    rl.close();
+    process.exit(0);
+  });
 
   console.log(pc.bold(`Hermes TS · 模型 ${deps.model} · 会话 ${session.id.slice(0, 8)}`));
   console.log(pc.dim('输入对话内容；/new 新会话，/help 帮助，/exit 退出。'));
@@ -37,7 +44,7 @@ export async function repl(deps: LoopDeps, db: SessionDB, ctx: Omit<ToolContext,
       for await (const ev of runConversation(deps, session.id, line, { ...ctx, signal: controller.signal })) {
         switch (ev.type) {
           case 'assistant_delta': stdout.write(ev.text); break;
-          case 'tool_call': console.log(pc.dim(`\n⚙ ${ev.name}(${ev.args})`)); break;
+          case 'tool_call': console.log(pc.dim(`\n⚙ ${ev.name}(${truncate(ev.args, 300)})`)); break;
           case 'tool_result': console.log(pc.dim(`↳ ${truncate(ev.output, 500)}`)); break;
           case 'turn_done': {
             const u = ev.result.usage;

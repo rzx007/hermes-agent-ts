@@ -13,13 +13,17 @@ async function main() {
   }
   ensureHermesHome();
   const db = new SessionDB(sessionDbPath());
+  process.on('exit', () => { try { db.close(); } catch { /* already closed */ } });
   const provider = createProvider(config);
   const registry = new ToolRegistry();
   registerBuiltins(registry);
 
   const deps = { db, provider, registry, model: config.model, maxIterations: config.maxIterations };
-  await repl(deps, db, { cwd: process.cwd(), logger: createLogger('cli') });
-  db.close();
+  try {
+    await repl(deps, { cwd: process.cwd(), logger: createLogger('cli') });
+  } finally {
+    db.close();
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
