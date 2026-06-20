@@ -20,6 +20,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
     model: env.HERMES_MODEL ?? fromFile.model ?? 'glm-4.6',
     apiKey: env.GLM_API_KEY ?? fromFile.apiKey ?? '',
     baseUrl: env.GLM_BASE_URL ?? fromFile.baseUrl ?? 'https://open.bigmodel.cn/api/paas/v4',
-    maxIterations: Number(env.HERMES_MAX_ITERATIONS ?? fromFile.maxIterations ?? 25),
+    maxIterations: Number(env.HERMES_MAX_ITERATIONS || fromFile.maxIterations || 25),
   };
 }
