@@ -13,6 +13,10 @@ export const terminalTool = defineTool({
   handler: ({ command, timeout = 120_000 }, ctx) =>
     new Promise<string>((resolve) => {
       const child = spawn('bash', ['-c', command], { cwd: ctx.cwd });
+      if (!child.stdout || !child.stderr) {
+        resolve('Error: 无法获取子进程的 stdout/stderr 流');
+        return;
+      }
       let stdout = '';
       let stderr = '';
       let timedOut = false;
@@ -22,11 +26,12 @@ export const terminalTool = defineTool({
       }, timeout);
       const onAbort = () => child.kill('SIGKILL');
       ctx.signal?.addEventListener('abort', onAbort);
+      if (ctx.signal?.aborted) child.kill('SIGKILL');
 
-      child.stdout?.on('data', (d) => {
+      child.stdout.on('data', (d) => {
         stdout += d;
       });
-      child.stderr?.on('data', (d) => {
+      child.stderr.on('data', (d) => {
         stderr += d;
       });
       child.on('close', (code) => {
