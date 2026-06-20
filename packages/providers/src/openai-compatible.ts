@@ -24,7 +24,7 @@ export async function aggregateChunks(
       const cur = calls.get(d.index) ?? { id: '', name: '', arguments: '' };
       if (d.id) cur.id = d.id;
       if (d.name) cur.name = d.name;
-      if (d.argsDelta) cur.arguments += d.argsDelta;
+      if (d.argsDelta !== undefined) cur.arguments += d.argsDelta;
       calls.set(d.index, cur);
     }
   }
@@ -36,7 +36,7 @@ export async function aggregateChunks(
   };
 }
 
-function toOpenAIMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {
+export function toOpenAIMessages(messages: Message[]): OpenAI.ChatCompletionMessageParam[] {
   return messages.map((m) => {
     if (m.role === 'assistant') {
       return {
@@ -51,13 +51,14 @@ function toOpenAIMessages(messages: Message[]): OpenAI.ChatCompletionMessagePara
       };
     }
     if (m.role === 'tool') {
-      return { role: 'tool', content: m.content ?? '', tool_call_id: m.toolCallId! };
+      if (!m.toolCallId) throw new Error('tool message is missing toolCallId');
+      return { role: 'tool', content: m.content ?? '', tool_call_id: m.toolCallId };
     }
     return { role: m.role, content: m.content ?? '' } as OpenAI.ChatCompletionMessageParam;
   });
 }
 
-function toOpenAITools(tools?: ToolSchema[]): OpenAI.ChatCompletionTool[] | undefined {
+export function toOpenAITools(tools?: ToolSchema[]): OpenAI.ChatCompletionTool[] | undefined {
   if (!tools?.length) return undefined;
   return tools.map((t) => ({
     type: 'function',
@@ -87,14 +88,16 @@ export class OpenAICompatibleProvider implements Provider {
       if (!delta) continue;
       if (delta.content) yield { contentDelta: delta.content };
       for (const tc of delta.tool_calls ?? []) {
-        yield {
-          toolCallDelta: {
-            index: tc.index,
-            id: tc.id,
-            name: tc.function?.name,
-            argsDelta: tc.function?.arguments,
-          },
-        };
+        if (tc.id || tc.function?.name || tc.function?.arguments !== undefined) {
+          yield {
+            toolCallDelta: {
+              index: tc.index,
+              id: tc.id,
+              name: tc.function?.name,
+              argsDelta: tc.function?.arguments,
+            },
+          };
+        }
       }
     }
   }
