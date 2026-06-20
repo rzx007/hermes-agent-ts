@@ -16,6 +16,8 @@ export interface CompletionRequest {
 export interface CompletionChunk {
   contentDelta?: string;
   toolCallDelta?: { index: number; id?: string; name?: string; argsDelta?: string };
+  finishReason?: string;
+  usage?: { promptTokens: number; completionTokens: number };
 }
 
 export interface CompletionResult {

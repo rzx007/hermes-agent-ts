@@ -13,12 +13,15 @@ export interface OpenAICompatibleOpts {
 // 纯函数：把流式增量聚合成完整结果（核心，单测覆盖）
 export async function aggregateChunks(
   chunks: AsyncIterable<CompletionChunk>,
-  finishReasonRef?: { value: string },
 ): Promise<CompletionResult> {
   let content = '';
+  let finishReason: string | undefined;
+  let usage: CompletionResult['usage'];
   const calls = new Map<number, { id: string; name: string; arguments: string }>();
   for await (const c of chunks) {
     if (c.contentDelta) content += c.contentDelta;
+    if (c.finishReason) finishReason = c.finishReason;
+    if (c.usage) usage = c.usage;
     if (c.toolCallDelta) {
       const d = c.toolCallDelta;
       const cur = calls.get(d.index) ?? { id: '', name: '', arguments: '' };
@@ -32,7 +35,8 @@ export async function aggregateChunks(
   return {
     content: content || null,
     toolCalls,
-    finishReason: finishReasonRef?.value ?? (toolCalls.length ? 'tool_calls' : 'stop'),
+    finishReason: finishReason ?? (toolCalls.length ? 'tool_calls' : 'stop'),
+    usage,
   };
 }
 
@@ -81,13 +85,13 @@ export class OpenAICompatibleProvider implements Provider {
       messages: toOpenAIMessages(req.messages),
       tools: toOpenAITools(req.tools),
       stream: true,
+      stream_options: { include_usage: true },
     }, { signal: req.signal });
 
     for await (const part of stream) {
-      const delta = part.choices[0]?.delta;
-      if (!delta) continue;
-      if (delta.content) yield { contentDelta: delta.content };
-      for (const tc of delta.tool_calls ?? []) {
+      const choice = part.choices[0];
+      if (choice?.delta?.content) yield { contentDelta: choice.delta.content };
+      for (const tc of choice?.delta?.tool_calls ?? []) {
         if (tc.id || tc.function?.name || tc.function?.arguments !== undefined) {
           yield {
             toolCallDelta: {
@@ -98,6 +102,15 @@ export class OpenAICompatibleProvider implements Provider {
             },
           };
         }
+      }
+      if (choice?.finish_reason) yield { finishReason: choice.finish_reason };
+      if (part.usage) {
+        yield {
+          usage: {
+            promptTokens: part.usage.prompt_tokens,
+            completionTokens: part.usage.completion_tokens,
+          },
+        };
       }
     }
   }

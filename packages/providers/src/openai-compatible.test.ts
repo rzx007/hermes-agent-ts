@@ -57,8 +57,13 @@ test('toOpenAITools 空数组返回 undefined，非空映射为 function 格式'
   expect(out?.[0]).toMatchObject({ type: 'function', function: { name: 'echo', description: 'd' } });
 });
 
-test('aggregateChunks 尊重 finishReasonRef 覆盖', async () => {
-  async function* g(cs: any[]) { for (const c of cs) yield c; }
-  const r = await aggregateChunks(g([{ toolCallDelta: { index: 0, id: 'c1', name: 'f', argsDelta: '{}' } }]), { value: 'length' });
-  expect(r.finishReason).toBe('length');
+test('aggregateChunks 从 chunk 读取 finishReason 与 usage', async () => {
+  async function* g(cs: CompletionChunk[]) { for (const c of cs) yield c; }
+  const r = await aggregateChunks(g([
+    { contentDelta: 'hi' },
+    { finishReason: 'stop' },
+    { usage: { promptTokens: 10, completionTokens: 5 } },
+  ]));
+  expect(r.finishReason).toBe('stop');
+  expect(r.usage).toEqual({ promptTokens: 10, completionTokens: 5 });
 });
