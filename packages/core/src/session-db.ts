@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_seq ON messages(session_id, seq);
 `;
 
 interface SessionRow {
@@ -54,7 +55,7 @@ export class SessionDB {
       source: opts.source ?? 'cli',
       startedAt: Date.now(),
       endedAt: null,
-      parentSessionId: null,
+      parentSessionId: null, // TODO(phase2): expose parentSessionId via CreateSessionOpts (压缩链/分支)
       modelConfig: opts.modelConfig ?? {},
     };
     this.db.prepare(
@@ -74,16 +75,18 @@ export class SessionDB {
   }
 
   appendMessage(sessionId: string, msg: Message): void {
-    const row = this.db.prepare('SELECT COALESCE(MAX(seq), -1) + 1 AS next FROM messages WHERE session_id = ?')
-      .get(sessionId) as { next: number };
-    this.db.prepare(
-      `INSERT INTO messages (session_id,seq,role,content,tool_calls,tool_call_id,name,created_at)
-       VALUES (?,?,?,?,?,?,?,?)`,
-    ).run(
-      sessionId, row.next, msg.role, msg.content,
-      msg.toolCalls ? JSON.stringify(msg.toolCalls) : null,
-      msg.toolCallId ?? null, msg.name ?? null, Date.now(),
-    );
+    this.db.transaction(() => {
+      const row = this.db.prepare('SELECT COALESCE(MAX(seq), -1) + 1 AS next FROM messages WHERE session_id = ?')
+        .get(sessionId) as { next: number };
+      this.db.prepare(
+        `INSERT INTO messages (session_id,seq,role,content,tool_calls,tool_call_id,name,created_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      ).run(
+        sessionId, row.next, msg.role, msg.content,
+        msg.toolCalls ? JSON.stringify(msg.toolCalls) : null,
+        msg.toolCallId ?? null, msg.name ?? null, Date.now(),
+      );
+    })();
   }
 
   getMessages(sessionId: string): Message[] {
