@@ -13,9 +13,13 @@ export const TOOLSETS: Record<string, Toolset> = {
     description: '执行 shell 命令',
     tools: ['terminal'],
   },
+  memory: {
+    description: '长期记忆读写',
+    tools: ['memory'],
+  },
   core: {
     description: '核心工具集',
-    includes: ['file', 'terminal'],
+    includes: ['file', 'terminal', 'memory'],
   },
 };
 

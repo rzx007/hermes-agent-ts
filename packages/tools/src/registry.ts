@@ -3,12 +3,14 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { Logger } from '@hermes/core';
 import type { ToolSchema } from '@hermes/providers';
 import type { ApprovalGuard } from './approval.js';
+import type { MemoryStore } from '@hermes/core';
 
 export interface ToolContext {
   cwd: string;
   signal?: AbortSignal;
   logger: Logger;
   approval?: ApprovalGuard;
+  memory?: MemoryStore;
 }
 
 export interface ToolDef<T extends z.ZodTypeAny = z.ZodTypeAny> {

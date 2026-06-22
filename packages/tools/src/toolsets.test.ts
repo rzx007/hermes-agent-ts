@@ -73,3 +73,9 @@ test('computeEnabledTools 仅 disabled(enabled undefined)= 全部减去 disabled
   const out = computeEnabledTools({ disabled: ['terminal'] }, registered).sort();
   expect(out).toEqual(['read_file', 'write_file']);
 });
+
+test('memory toolset 存在且 core 包含它', () => {
+  expect(Object.keys(TOOLSETS)).toContain('memory');
+  expect(resolveToolset('memory')).toEqual(['memory']);
+  expect(resolveToolset('core')).toContain('memory');
+});
