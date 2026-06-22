@@ -65,3 +65,10 @@ test('call 在 handler 抛非 Error 值时也返回错误文本', async () => {
   expect(out).toContain('Error');
   expect(out).toContain('plain string error');
 });
+
+test('getToolNames 返回所有已注册工具名', () => {
+  const r = new ToolRegistry();
+  r.register({ name: 'a', description: 'd', toolset: 'core', schema: z.object({}), handler: async () => 'a' });
+  r.register({ name: 'b', description: 'd', toolset: 'core', schema: z.object({}), handler: async () => 'b' });
+  expect(r.getToolNames().sort()).toEqual(['a', 'b']);
+});

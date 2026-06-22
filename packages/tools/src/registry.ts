@@ -26,6 +26,10 @@ export class ToolRegistry {
 
   has(name: string): boolean { return this.tools.has(name); }
 
+  getToolNames(): string[] {
+    return [...this.tools.keys()];
+  }
+
   getSchemas(names?: string[]): ToolSchema[] {
     const defs = names
       ? names.map((n) => this.tools.get(n)).filter((d): d is ToolDef => !!d)

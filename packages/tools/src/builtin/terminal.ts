@@ -5,7 +5,7 @@ import { defineTool } from '../registry.js';
 export const terminalTool = defineTool({
   name: 'terminal',
   description: '在 local shell（bash）执行命令，返回 stdout/stderr 与退出码。',
-  toolset: 'core',
+  toolset: 'terminal',
   schema: z.object({
     command: z.string().describe('要执行的 shell 命令'),
     timeout: z.number().optional().describe('超时毫秒数，默认 120000'),

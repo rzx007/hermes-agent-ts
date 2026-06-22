@@ -8,7 +8,7 @@ const MAX_BYTES = 100 * 1024;
 export const readFileTool = defineTool({
   name: 'read_file',
   description: '读取文本文件内容，返回带行号的文本。超过 100KB 会截断。',
-  toolset: 'core',
+  toolset: 'file',
   schema: z.object({ path: z.string().describe('相对或绝对文件路径') }),
   handler: async ({ path }, ctx) => {
     const full = resolve(ctx.cwd, path);
