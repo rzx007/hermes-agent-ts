@@ -130,3 +130,20 @@ test('已中止的 signal 立即结束当前轮', async () => {
   for await (const e of runConversation(deps, s.id, 'x', { cwd: '/', logger: createLogger('t'), signal: ac.signal })) events.push(e);
   expect(events.at(-1)?.type).toBe('error');
 });
+
+test('toolNames 限定暴露给 provider 的工具', async () => {
+  const seen: string[][] = [];
+  const provider: Provider = {
+    name: 'mock',
+    async *complete(req) { seen.push((req.tools ?? []).map((t) => t.name)); yield { contentDelta: 'ok' }; },
+    async aggregate(): Promise<CompletionResult> { return { content: 'ok', toolCalls: [], finishReason: 'stop' }; },
+  };
+  const { db, deps } = makeDeps(provider);
+  // makeDeps 注册了 read_file;再注册一个 terminal 以便区分
+  deps.registry.register({ name: 'terminal', description: 't', toolset: 'terminal', schema: z.object({}), handler: async () => 'x' });
+  // 用展开构造带 toolNames 的新 deps(makeDeps 返回的是 inferred 字面量,不能直接赋 toolNames)
+  const filtered = { ...deps, toolNames: ['read_file'] };
+  const s = db.createSession();
+  for await (const _ of runConversation(filtered, s.id, 'hi', { cwd: '/', logger: createLogger('t') })) { /* drain */ }
+  expect(seen[0]).toEqual(['read_file']);
+});

@@ -11,6 +11,7 @@ export interface LoopDeps {
   registry: ToolRegistry;
   model: string;
   maxIterations: number;
+  toolNames?: string[];
 }
 /**
  * runConversation — 单次用户输入的 ReAct / tool-use 循环
@@ -77,7 +78,7 @@ export async function* runConversation(
   ];
   db.appendMessage(sessionId, { role: 'user', content: userText });
 
-  const tools = registry.getSchemas();
+  const tools = registry.getSchemas(deps.toolNames);
 
   try {
     for (let iteration = 0; iteration < maxIterations; iteration++) {
