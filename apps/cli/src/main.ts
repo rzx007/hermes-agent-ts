@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import 'dotenv/config';
-import { loadConfig, ensureHermesHome, sessionDbPath, SessionDB, createLogger } from '@hermes/core';
+import { loadConfig, ensureHermesHome, sessionDbPath, SessionDB, createLogger, MemoryStore, memoriesDir } from '@hermes/core';
 import { createProvider } from '@hermes/providers';
 import { ToolRegistry, registerBuiltins, computeEnabledTools, TOOLSETS } from '@hermes/tools';
 import { repl } from './repl.js';
@@ -12,6 +12,7 @@ async function main() {
     process.exit(1);
   }
   ensureHermesHome();
+  const memory = new MemoryStore(memoriesDir());
   const db = new SessionDB(sessionDbPath());
   process.on('exit', () => { try { db.close(); } catch { /* already closed */ } });
   const provider = createProvider(config);
@@ -31,7 +32,7 @@ async function main() {
     }
   }
 
-  const deps = { db, provider, registry, model: config.model, maxIterations: config.maxIterations, toolNames };
+  const deps = { db, provider, registry, model: config.model, maxIterations: config.maxIterations, toolNames, memory };
   try {
     await repl(deps, { cwd: process.cwd(), logger }, { approvalMode: config.approvalMode ?? 'manual' });
   } finally {
