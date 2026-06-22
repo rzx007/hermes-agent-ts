@@ -23,7 +23,13 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>) {
     const line = (await rl.question(pc.cyan('\n› '))).trim();
     if (!line) continue;
     if (line === '/exit') break;
-    if (line === '/help') { console.log('/new 新会话  /exit 退出  /help 帮助'); continue; }
+    if (line === '/help') { console.log('/new 新会话  /tools 查看启用工具  /exit 退出  /help 帮助'); continue; }
+    if (line === '/tools') {
+      const names = deps.toolNames ?? deps.registry.getToolNames();
+      console.log(pc.dim(`启用的工具(${names.length}):`));
+      console.log(names.join(', '));
+      continue;
+    }
     if (line === '/new') {
       db.endSession(session.id);
       session = db.createSession({ source: 'cli', modelConfig: { provider: deps.provider.name, model: deps.model } });
