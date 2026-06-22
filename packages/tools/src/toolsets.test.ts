@@ -54,3 +54,22 @@ test('computeEnabledTools 未知 toolset 跳过(不抛)', () => {
   expect(() => computeEnabledTools({ enabled: ['nope'] }, registered)).not.toThrow();
   expect(computeEnabledTools({ enabled: ['nope'] }, registered)).toEqual([]);
 });
+
+test('resolveToolset 真实环依赖(A↔B)不死循环', () => {
+  const t = TOOLSETS as Record<string, { description: string; tools?: string[]; includes?: string[] }>;
+  t.cycleA = { description: '', includes: ['cycleB'] };
+  t.cycleB = { description: '', includes: ['cycleA'] };
+  try {
+    expect(() => resolveToolset('cycleA')).not.toThrow();
+    expect(resolveToolset('cycleA')).toEqual([]); // 纯环、无工具
+  } finally {
+    delete t.cycleA;
+    delete t.cycleB;
+  }
+});
+
+test('computeEnabledTools 仅 disabled(enabled undefined)= 全部减去 disabled', () => {
+  const registered = ['read_file', 'write_file', 'terminal'];
+  const out = computeEnabledTools({ disabled: ['terminal'] }, registered).sort();
+  expect(out).toEqual(['read_file', 'write_file']);
+});

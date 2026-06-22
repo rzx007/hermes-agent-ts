@@ -19,6 +19,7 @@ export const TOOLSETS: Record<string, Toolset> = {
   },
 };
 
+// 注意:'all' 与 '*' 是 resolveToolset 的保留名,不要作为 TOOLSETS 的键(否则该分支会无限递归)。
 // 递归展开 toolset 名 → 工具名数组。支持 'all'/'*';未知名返回 [];visited 做环检测。
 export function resolveToolset(name: string, visited: Set<string> = new Set()): string[] {
   if (name === 'all' || name === '*') {
