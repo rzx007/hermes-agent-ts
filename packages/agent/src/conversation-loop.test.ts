@@ -147,3 +147,19 @@ test('toolNames 限定暴露给 provider 的工具', async () => {
   for await (const _ of runConversation(filtered, s.id, 'hi', { cwd: '/', logger: createLogger('t') })) { /* drain */ }
   expect(seen[0]).toEqual(['read_file']);
 });
+
+test('注入 deps.memory 后 system 消息含记忆内容', async () => {
+  const seen: import('@hermes/core').Message[][] = [];
+  const provider: Provider = {
+    name: 'mock',
+    async *complete(req) { seen.push(req.messages); yield { contentDelta: 'ok' }; },
+    async aggregate(): Promise<CompletionResult> { return { content: 'ok', toolCalls: [], finishReason: 'stop' }; },
+  };
+  const { db, deps } = makeDeps(provider);
+  const fakeMemory = { render: () => '════ MEMORY ════\n记得喜欢 pnpm' } as unknown as import('@hermes/core').MemoryStore;
+  const filtered = { ...deps, memory: fakeMemory };
+  const s = db.createSession();
+  for await (const _ of runConversation(filtered, s.id, 'hi', { cwd: '/', logger: createLogger('t') })) { /* drain */ }
+  const sys = seen[0]!.find((m) => m.role === 'system');
+  expect(sys?.content).toContain('记得喜欢 pnpm');
+});

@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import type { SessionDB, Message } from '@hermes/core';
+import type { SessionDB, Message, MemoryStore } from '@hermes/core';
 import type { Provider, CompletionChunk } from '@hermes/providers';
 import type { ToolRegistry, ToolContext } from '@hermes/tools';
 import type { LoopEvent } from './events.js';
@@ -12,6 +12,7 @@ export interface LoopDeps {
   model: string;
   maxIterations: number;
   toolNames?: string[];
+  memory?: MemoryStore;
 }
 /**
  * runConversation — 单次用户输入的 ReAct / tool-use 循环
@@ -72,7 +73,7 @@ export async function* runConversation(
   // 1. 构建消息：system + 历史 + 新 user
   const history = db.getMessages(sessionId);
   const messages: Message[] = [
-    { role: 'system', content: buildSystemPrompt(ctx.cwd) },
+    { role: 'system', content: buildSystemPrompt(ctx.cwd, deps.memory?.render()) },
     ...history,
     { role: 'user', content: userText },
   ];
