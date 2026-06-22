@@ -9,11 +9,18 @@ export interface HermesConfig {
   apiKey: string;
   baseUrl: string;
   maxIterations: number;
+  enabledToolsets?: string[];
+  disabledToolsets?: string[];
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
   const file = join(getHermesHome(env), 'config.yaml');
   const fromFile: Record<string, any> = existsSync(file) ? (parse(readFileSync(file, 'utf8')) ?? {}) : {};
+  const parseList = (v: string | undefined, fileVal: unknown): string[] | undefined => {
+    if (v !== undefined && v.trim() !== '') return v.split(',').map((s) => s.trim()).filter(Boolean);
+    if (Array.isArray(fileVal)) return (fileVal as unknown[]).map(String);
+    return undefined;
+  };
   const provider = env.HERMES_PROVIDER ?? fromFile.provider ?? 'glm';
   return {
     provider,
@@ -21,5 +28,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
     apiKey: env.GLM_API_KEY ?? fromFile.apiKey ?? '',
     baseUrl: env.GLM_BASE_URL ?? fromFile.baseUrl ?? 'https://open.bigmodel.cn/api/paas/v4',
     maxIterations: Number(env.HERMES_MAX_ITERATIONS || fromFile.maxIterations || 25),
+    enabledToolsets: parseList(env.HERMES_ENABLED_TOOLSETS, fromFile.enabledToolsets),
+    disabledToolsets: parseList(env.HERMES_DISABLED_TOOLSETS, fromFile.disabledToolsets),
   };
 }
