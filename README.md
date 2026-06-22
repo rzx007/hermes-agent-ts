@@ -2,9 +2,12 @@
 
 用 TypeScript 复刻 [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent)（原项目为 Python）。**架构级对齐 + 惯用 TS 重写**，分阶段推进。
 
-## 当前状态：阶段 1（核心代理 MVP）✅
+## 当前状态：阶段 2（工具系统）✅
 
-一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的最小可用 AI 代理。
+一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的可用 AI 代理，并具备工具集分组与一套本地文件/代码工具（读、写、精确编辑、搜索、列目录、执行命令）。
+
+- 阶段 1（核心代理 MVP）✅ — SessionDB / Provider / ToolRegistry / ConversationLoop / CLI
+- 阶段 2（工具系统）✅ — Toolsets 分组 + `edit_file` / `search_files` / `list_dir`
 
 - **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
@@ -35,6 +38,10 @@ cp .env.example .env
 # GLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 # HERMES_MODEL=glm-4.6
 ```
+
+> `GLM_BASE_URL` 需与 Key 来源匹配（客户端走 OpenAI 兼容协议）：
+> - 智谱开放平台（bigmodel.cn）→ `https://open.bigmodel.cn/api/paas/v4`
+> - GLM Coding Plan（z.ai）→ `https://api.z.ai/api/coding/paas/v4`
 
 也可用 `~/.hermes-ts/config.yaml`（env 优先）。
 
@@ -98,8 +105,10 @@ docs/superpowers/
 
 设计与计划见 `docs/superpowers/`。
 
-## 已知限制（阶段 1）
+## 已知限制（当前）
 
 - `terminal` 工具无命令审批/白名单（后续阶段加）
+- 工具均为本地执行；尚无远程终端后端（docker/ssh，后续阶段）
+- 无 web/vision/browser 等外部依赖工具（后续阶段）
 - 无上下文压缩 / 无重试降级 / 无记忆与技能系统（后续阶段）
 - 仅支持 GLM provider（Provider 抽象已就绪，加新 provider 只需新增实现）
