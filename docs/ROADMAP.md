@@ -20,7 +20,7 @@
 |------|------|------|
 | 1 | 核心代理 MVP | ✅ 完成 |
 | 2 | 工具系统:Toolsets 分组 + 文件/代码工具 | ✅ 完成 |
-| 2.5 | 命令审批 / 安全 | 🚧 设计中 |
+| 2.5 | 命令审批 / 安全 | ✅ 完成 |
 | — | Terminal 后端(docker/ssh) | ⏸️ 计划 |
 | — | Web 工具(web_search/web_extract) | ⏸️ 计划 |
 | 3 | 记忆 + 技能(自进化) | ⏸️ 计划 |
@@ -75,11 +75,11 @@
 
 ---
 
-## 阶段 2.5:命令审批 / 安全 🚧
+## 阶段 2.5:命令审批 / 安全 ✅
 
 **目标**:补上阶段 1 留下的 terminal 安全缺口——危险命令在执行前需用户审批。
 
-**计划做(MVP)**:
+**已做(MVP)**:
 - **危险模式检测**:精选正则清单(~20 条:`rm -rf /`、`chmod 777`、`mkfs`、`dd`、`curl|sh`、fork bomb、写 `/etc`、`~/.ssh` 等)
 - **hardline 永禁**:3-5 条最致命的,任何模式都阻止(连 off 也绕不过)
 - **交互审批**:命中危险模式 → CLI 提示 `[o]nce / [s]ession / [a]lways / [d]eny`
@@ -158,7 +158,6 @@
 
 ## 跨阶段:已知限制(当前)
 
-- `terminal` 无命令审批(阶段 2.5 修复中)
 - 工具均本地执行,无远程后端
 - 无 web/vision/browser 等外部依赖工具
 - 无上下文压缩 / 无重试降级 / 无记忆与技能
@@ -167,6 +166,7 @@
 ## 运维备忘
 
 - HERMES_HOME = `~/.hermes-ts`(避免与 Python 版 `~/.hermes` 冲突)
+- 命令审批白名单(`always` 永久放行)持久化在 `~/.hermes-ts/allowlist.json`
 - `better-sqlite3` 预编译二进制从 GitHub CDN 拉取偶发 ECONNRESET;根 `package.json` 的 `pnpm.onlyBuiltDependencies` 已允许其构建,失败可重试或用 C++ 工具链编译
 - GLM 端点按 Key 来源:智谱开放平台 `https://open.bigmodel.cn/api/paas/v4`;GLM Coding Plan(z.ai)`https://api.z.ai/api/coding/paas/v4`
 - 每阶段开工前先实测基线 `pnpm vitest run` 是否全绿(用户可能在会话间自行向 main 提交改动)

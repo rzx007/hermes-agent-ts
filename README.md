@@ -11,7 +11,7 @@
 
 - **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
-- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal`
+- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` + 命令审批（危险命令需确认）
 - **@hermes/agent** — ConversationLoop 核心循环（流式、工具循环、落库、中断、maxIterations 守卫）
 - **@hermes/cli** — readline REPL（`/new` `/tools` `/exit` `/help`，流式渲染，Ctrl+C 中断）
 
@@ -63,6 +63,21 @@ HERMES_ENABLED_TOOLSETS=file
 - 计算顺序：`enabled` 取并集 → 再减去 `disabled` → 末尾与实际注册的工具取交集。
 - CLI 内输入 `/tools` 可查看当前会话实际启用的工具列表。
 
+## 命令审批 (Command Approval)
+
+`terminal` 工具在执行被判定为「危险」的命令前，会先经过审批闸门（ApprovalGuard）。
+
+- **HARDLINE（永久阻止）**：`rm -rf /`、`mkfs`、`dd` 等极端破坏性命令永远不会被执行，**即使在 `off` 模式下也会被拦截**，且不可通过审批放行。
+- **审批选项**：当命令危险且非 HARDLINE 时，会提示 `[o]nce / [s]ession / [a]lways / [d]eny`：
+  - `once` — 仅本次允许；
+  - `session` — 本次会话内对该命令免审批；
+  - `always` — 永久允许，并持久化到 `~/.hermes-ts/allowlist.json`；
+  - `deny` — 拒绝执行。
+- **模式**（环境变量）：
+  - `HERMES_APPROVAL_MODE=manual`（默认）— 仅危险命令才提示审批，安全命令直接放行；
+  - `HERMES_APPROVAL_MODE=off` — 关闭审批提示（危险命令直接放行，但 HARDLINE 仍然拦截）；
+  - `HERMES_YOLO_MODE=1` — 等同于 `off`（但 HARDLINE 仍然拦截）。
+
 ## 运行
 
 ```bash
@@ -107,7 +122,6 @@ docs/superpowers/
 
 ## 已知限制（当前）
 
-- `terminal` 工具无命令审批/白名单（后续阶段加）
 - 工具均为本地执行；尚无远程终端后端（docker/ssh，后续阶段）
 - 无 web/vision/browser 等外部依赖工具（后续阶段）
 - 无上下文压缩 / 无重试降级 / 无记忆与技能系统（后续阶段）
