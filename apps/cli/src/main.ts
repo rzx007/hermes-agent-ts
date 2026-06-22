@@ -8,7 +8,7 @@ import { repl } from './repl.js';
 async function main() {
   const config = loadConfig();
   if (!config.apiKey) {
-    console.error('缺少 API Key。请设置环境变量 GLM_API_KEY 或在 ~/.hermes/config.yaml 配置。');
+    console.error('缺少 API Key。请设置环境变量 GLM_API_KEY 或在 ~/.hermes-ts/config.yaml 配置。');
     process.exit(1);
   }
   ensureHermesHome();

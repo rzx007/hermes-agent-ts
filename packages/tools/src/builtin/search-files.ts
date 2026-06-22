@@ -51,12 +51,13 @@ export const searchFilesTool = defineTool({
       for (let i = 0; i < fileLines.length; i++) {
         if (regex.test(fileLines[i]!)) {
           const entry = `${rel}:${i + 1}: ${fileLines[i]!.trim()}`;
-          if (lines.length >= MAX_MATCHES || bytes + entry.length > MAX_BYTES) {
+          const entryBytes = Buffer.byteLength(entry, 'utf8');
+          if (lines.length >= MAX_MATCHES || bytes + entryBytes > MAX_BYTES) {
             truncated = true;
             break;
           }
           lines.push(entry);
-          bytes += Buffer.byteLength(entry, 'utf8');
+          bytes += entryBytes;
         }
       }
       if (truncated) break;
