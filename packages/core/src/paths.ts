@@ -5,7 +5,7 @@ import { mkdirSync } from 'node:fs';
 export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
   if (env.HERMES_HOME) return env.HERMES_HOME;
   const home = env.HOME ?? env.USERPROFILE ?? homedir();
-  return join(home, '.hermes');
+  return join(home, '.hermes-ts');
 }
 
 export function ensureHermesHome(env: NodeJS.ProcessEnv = process.env): string {

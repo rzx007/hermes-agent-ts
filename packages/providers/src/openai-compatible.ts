@@ -90,6 +90,8 @@ export class OpenAICompatibleProvider implements Provider {
 
     for await (const part of stream) {
       const choice = part.choices[0];
+      const reasoningDelta = (choice?.delta as any)?.reasoning_content as string | undefined;
+      if (reasoningDelta) yield { contentDelta: reasoningDelta };
       if (choice?.delta?.content) yield { contentDelta: choice.delta.content };
       for (const tc of choice?.delta?.tool_calls ?? []) {
         if (tc.id || tc.function?.name || tc.function?.arguments !== undefined) {
