@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MemoryStore } from './memory-store.js';
@@ -97,4 +97,31 @@ test('损坏/缺失文件 → 空条目不崩', () => {
   expect(new MemoryStore(dir).getEntries('memory')).toEqual([]);
   writeFileSync(join(dir, 'MEMORY.md'), '');
   expect(new MemoryStore(dir).getEntries('memory')).toEqual([]);
+});
+
+test('add 拒绝含分隔符的内容', () => {
+  const m = new MemoryStore(dir);
+  expect(() => m.add('memory', 'a\n§\nb')).toThrow();
+});
+
+test('replace 拒绝含分隔符的替换内容', () => {
+  const m = new MemoryStore(dir);
+  m.add('memory', 'hello');
+  expect(() => m.replace('memory', 'hello', 'x\n§\ny')).toThrow();
+});
+
+test('replace/remove 空 oldText → throw', () => {
+  const m = new MemoryStore(dir);
+  m.add('memory', 'only one');
+  expect(() => m.replace('memory', '', 'x')).toThrow();
+  expect(() => m.remove('memory', '')).toThrow();
+  // 未被破坏
+  expect(m.getEntries('memory')).toEqual(['only one']);
+});
+
+test('原子写后不残留 .tmp 文件', () => {
+  const m = new MemoryStore(dir);
+  m.add('memory', 'data');
+  expect(existsSync(join(dir, 'MEMORY.md'))).toBe(true);
+  expect(existsSync(join(dir, 'MEMORY.md.tmp'))).toBe(false);
 });

@@ -17,11 +17,7 @@ export class MemoryStore {
 
   constructor(dir: string) {
     this.dir = dir;
-    try {
-      mkdirSync(dir, { recursive: true });
-    } catch {
-      /* ignore */
-    }
+    mkdirSync(dir, { recursive: true });
     this.entries = {
       memory: this.load('memory'),
       user: this.load('user'),
@@ -35,10 +31,12 @@ export class MemoryStore {
   add(target: MemoryTarget, content: string): void {
     const c = content.trim();
     if (!c) throw new Error('记忆内容不能为空。');
+    if (c.includes(DELIM)) throw new Error('记忆内容不能包含条目分隔符(\\n§\\n)。');
     this.commit(target, [...this.entries[target], c]);
   }
 
   replace(target: MemoryTarget, oldText: string, content: string): void {
+    if (content.includes(DELIM)) throw new Error('替换内容不能包含条目分隔符(\\n§\\n)。');
     const idx = this.uniqueIndex(target, oldText);
     const next = [...this.entries[target]];
     next[idx] = this.entries[target][idx]!.split(oldText).join(content);
@@ -62,6 +60,7 @@ export class MemoryStore {
   }
 
   private uniqueIndex(target: MemoryTarget, oldText: string): number {
+    if (oldText === '') throw new Error('oldText 不能为空。');
     const matches = this.entries[target]
       .map((e, i) => (e.includes(oldText) ? i : -1))
       .filter((i) => i !== -1);
@@ -85,7 +84,7 @@ export class MemoryStore {
     try {
       const raw = readFileSync(join(this.dir, FILES[target]), 'utf8');
       if (raw.trim() === '') return [];
-      return raw.split(DELIM);
+      return raw.split(DELIM).filter((e) => e.trim() !== '');
     } catch {
       return [];
     }
