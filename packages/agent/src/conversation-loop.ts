@@ -12,6 +12,53 @@ export interface LoopDeps {
   model: string;
   maxIterations: number;
 }
+/**
+ * runConversation — 单次用户输入的 ReAct / tool-use 循环
+ *
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │  准备阶段（循环外，只做一次）                                  │
+ *  │  history ← DB    messages ← system + history + user          │
+ *  │  user 消息落库    tools ← registry.getSchemas()              │
+ *  └──────────────────────────┬──────────────────────────────────┘
+ *                             │
+ *                             ▼
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │  iteration loop  (0 .. maxIterations-1)                    │
+ *  │                                                             │
+ *  │   messages + tools                                          │
+ *  │        │                                                    │
+ *  │        ▼                                                    │
+ *  │   provider.complete()  ──stream──►  yield assistant_delta   │
+ *  │        │                         (CLI 实时打字)              │
+ *  │        └── captured[] 缓存所有 chunk                        │
+ *  │                │                                            │
+ *  │                ▼                                            │
+ *  │        provider.aggregate(captured) → CompletionResult      │
+ *  │                │                                            │
+ *  │                ▼                                            │
+ *  │        assistant 消息 → messages[] + DB                     │
+ *  │                │                                            │
+ *  │        ┌───────┴───────┐                                    │
+ *  │        │ toolCalls?    │                                    │
+ *  │        ▼               ▼                                    │
+ *  │      空              非空                                    │
+ *  │        │               │                                    │
+ *  │        ▼               ▼                                    │
+ *  │   turn_done         for each call:                          │
+ *  │   return            yield tool_call                         │
+ *  │                     registry.call()                       │
+ *  │                     yield tool_result                       │
+ *  │                     tool 消息 → messages[] + DB             │
+ *  │                           │                                 │
+ *  │                           └──► 下一轮 iteration             │
+ *  └─────────────────────────────────────────────────────────────┘
+ *                             │
+ *              超过 maxIterations → yield error
+ *              异常 / abort      → yield error
+ *
+ * LoopEvent 类型:
+ *   assistant_delta | tool_call | tool_result | turn_done | error
+ */
 
 export async function* runConversation(
   deps: LoopDeps,
@@ -78,3 +125,13 @@ export async function* runConversation(
     yield { type: 'error', error: e instanceof Error ? e.message : String(e) };
   }
 }
+/**
+[system]
+[user]           ← 本次输入
+[assistant]      ← 第1轮：决定调 read_file
+[tool]           ← read_file 结果
+[assistant]      ← 第2轮：决定调 write_file
+[tool]           ← write_file 结果
+[assistant]      ← 第3轮：纯文本回答，toolCalls=[]
+                 → turn_done，等待下一条 user 输入
+*/
