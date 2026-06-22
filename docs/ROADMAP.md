@@ -86,7 +86,7 @@
 - **白名单**:`session`(内存)+ `always`(持久化到 `~/.hermes-ts/allowlist.json`)
 - **模式**:`manual`(默认,危险才提示)/ `off`(=`HERMES_YOLO_MODE`,全放行但 hardline 仍拦)
 - **作用范围:仅 terminal 工具**
-- **架构**:审批请求经 `ToolContext.approve(request)` 回调从工具传到 CLI(readline);无回调环境按策略默认
+- **架构**:`ToolContext.approval`(ApprovalGuard 对象)注入工具上下文;readline 审批回调封装在 guard 内;无 guard/无 prompt 环境按策略默认(危险命令拒绝)
 
 **明确不做(推迟)**:
 - smart LLM 审批(辅助模型自动判低风险)

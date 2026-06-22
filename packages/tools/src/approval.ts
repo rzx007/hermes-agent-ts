@@ -3,7 +3,7 @@ import type { Logger } from '@hermes/core';
 
 // 任何模式都阻止(连 off/yolo 都绕不过)——最致命的
 const HARDLINE_PATTERNS: Array<[RegExp, string]> = [
-  [/\brm\b(\s+-{1,2}[a-z-]+)*\s+\/(\s|$)/i, '删除根目录'],
+  [/\brm\b(\s+-{1,2}[a-z-]+)*\s+['"]?\/+\*?(\s|['"]|$)/i, '删除根目录'],
   [/\bmkfs\b/i, '格式化文件系统'],
   [/\bdd\b[^\n]*\bof=\/dev\/(?!null\b|zero\b)/i, 'dd 覆写块设备'],
   [/:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, 'fork bomb'],

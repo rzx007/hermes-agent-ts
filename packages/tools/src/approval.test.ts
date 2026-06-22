@@ -110,3 +110,15 @@ test('load 缺失文件 → 空集不崩(允许 safe)', async () => {
   const g = new ApprovalGuard({ mode: 'manual', allowlistPath: join(tmpdir(), 'definitely-missing-xyz', 'allowlist.json') });
   expect((await g.check('ls')).allowed).toBe(true);
 });
+
+test('hardline 覆盖根擦除变体(glob/引号/双斜杠)', () => {
+  expect(detectDangerous('rm -rf /*').level).toBe('hardline');
+  expect(detectDangerous("rm -rf '/'").level).toBe('hardline');
+  expect(detectDangerous('rm -fr //').level).toBe('hardline');
+  expect(detectDangerous('rm /*').level).toBe('hardline');
+});
+
+test('非根删除仍为 dangerous(不被根 hardline 误伤)', () => {
+  expect(detectDangerous('rm -rf /tmp/x').level).toBe('dangerous');
+  expect(detectDangerous('rm -rf ./build').level).toBe('dangerous');
+});
