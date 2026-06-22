@@ -33,3 +33,16 @@ test('replaceAll 替换全部', async () => {
   expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('b b b');
   expect(out).toContain('3');
 });
+
+test('newString 含 $ 特殊序列时按字面量处理', async () => {
+  writeFileSync(join(dir, 'a.txt'), 'prefix TARGET suffix');
+  await editFileTool.handler({ path: 'a.txt', oldString: 'TARGET', newString: 'cost: $& and $1 each' }, ctx());
+  expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('prefix cost: $& and $1 each suffix');
+});
+
+test('多行 oldString 跨行替换', async () => {
+  writeFileSync(join(dir, 'a.txt'), 'line1\nOLD_A\nOLD_B\nline4');
+  const out = await editFileTool.handler({ path: 'a.txt', oldString: 'OLD_A\nOLD_B', newString: 'NEW' }, ctx());
+  expect(readFileSync(join(dir, 'a.txt'), 'utf8')).toBe('line1\nNEW\nline4');
+  expect(out).toContain('1');
+});

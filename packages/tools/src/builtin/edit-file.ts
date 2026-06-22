@@ -19,8 +19,8 @@ export const editFileTool = defineTool({
   description: '精确字符串替换编辑文件。oldString 必须在文件中唯一(或设 replaceAll)。',
   toolset: 'file',
   schema: z.object({
-    path: z.string(),
-    oldString: z.string().describe('要被替换的精确文本'),
+    path: z.string().describe('相对或绝对文件路径'),
+    oldString: z.string().min(1).describe('要被替换的精确文本(不能为空)'),
     newString: z.string().describe('替换后的文本'),
     replaceAll: z.boolean().optional().describe('替换全部匹配,默认 false'),
   }),
@@ -34,10 +34,8 @@ export const editFileTool = defineTool({
     if (n > 1 && !replaceAll) {
       throw new Error(`oldString 不唯一(出现 ${n} 处)。请提供更长的上下文使其唯一,或设 replaceAll: true。`);
     }
-    const updated = replaceAll
-      ? content.split(oldString).join(newString)
-      : content.replace(oldString, newString);
+    const updated = content.split(oldString).join(newString);
     writeFileSync(full, updated, 'utf8');
-    return `已在 ${path} 替换 ${replaceAll ? n : 1} 处`;
+    return `已在 ${path} 替换 ${n} 处`;
   },
 });
