@@ -10,8 +10,12 @@ export const terminalTool = defineTool({
     command: z.string().describe('要执行的 shell 命令'),
     timeout: z.number().optional().describe('超时毫秒数，默认 120000'),
   }),
-  handler: ({ command, timeout = 120_000 }, ctx) =>
-    new Promise<string>((resolve) => {
+  handler: async ({ command, timeout = 120_000 }, ctx) => {
+    if (ctx.approval) {
+      const verdict = await ctx.approval.check(command);
+      if (!verdict.allowed) return verdict.reason ?? '已阻止该命令。';
+    }
+    return new Promise<string>((resolve) => {
       const child = spawn('bash', ['-c', command], { cwd: ctx.cwd });
       if (!child.stdout || !child.stderr) {
         resolve('Error: 无法获取子进程的 stdout/stderr 流');
@@ -47,5 +51,6 @@ export const terminalTool = defineTool({
         parts.push(`exit code: ${code ?? -1}`);
         resolve(parts.join('\n'));
       });
-    }),
+    });
+  },
 });
