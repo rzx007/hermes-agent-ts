@@ -3,9 +3,9 @@ import type { Logger } from '@hermes/core';
 
 // 任何模式都阻止(连 off/yolo 都绕不过)——最致命的
 const HARDLINE_PATTERNS: Array<[RegExp, string]> = [
-  [/\brm\s+(-[a-z]*\s+)*-[a-z]*r[a-z]*f?[a-z]*\s+\/(\s|$)/i, '递归删除根目录'],
+  [/\brm\b(\s+-{1,2}[a-z-]+)*\s+\/(\s|$)/i, '删除根目录'],
   [/\bmkfs\b/i, '格式化文件系统'],
-  [/\bdd\b[^\n]*\bof=\/dev\//i, 'dd 覆写块设备'],
+  [/\bdd\b[^\n]*\bof=\/dev\/(?!null\b|zero\b)/i, 'dd 覆写块设备'],
   [/:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/, 'fork bomb'],
   [/>\s*\/dev\/(sd|nvme|disk)/i, '写入块设备'],
 ];
@@ -13,6 +13,8 @@ const HARDLINE_PATTERNS: Array<[RegExp, string]> = [
 // 命中即需审批(可被 off/yolo/白名单放行)
 const DANGEROUS_PATTERNS: Array<[RegExp, string]> = [
   [/\brm\s+(-[a-z]*\s+)*-[a-z]*r/i, '递归删除'],
+  [/\brm\b[^\n]*--(recursive|force)\b/i, '递归/强制删除(长格式)'],
+  [/\bfind\b[^\n]*\s-delete\b/i, 'find -delete 批量删除'],
   [/\bchmod\s+(-[a-z]*\s+)*(777|666|a\+w|o\+w)/i, '放开写权限'],
   [/\bchown\s+(-[a-z]*\s+)*-R\b/i, '递归改所有者'],
   [/\b(curl|wget)\b[^\n]*\|\s*(ba)?sh\b/i, '下载并执行'],
@@ -100,7 +102,8 @@ export class ApprovalGuard {
       const data = JSON.parse(raw) as { commands?: unknown };
       const cmds = Array.isArray(data.commands) ? data.commands.map(String) : [];
       return new Set(cmds);
-    } catch {
+    } catch (e) {
+      this.logger?.warn(`读 allowlist 失败:${e instanceof Error ? e.message : String(e)}`);
       return new Set();
     }
   }

@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import { detectDangerous, ApprovalGuard } from './approval.js';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -89,4 +89,24 @@ test('损坏的 allowlist 文件 → 空集不崩', async () => {
   const path = tmpAllowlist();
   writeFileSync(path, '{ not json');
   expect(() => new ApprovalGuard({ mode: 'manual', allowlistPath: path })).not.toThrow();
+});
+
+test('hardline 覆盖根删除的分离标志与长格式', () => {
+  expect(detectDangerous('rm -r -f /').level).toBe('hardline');
+  expect(detectDangerous('rm --recursive /').level).toBe('hardline');
+  expect(detectDangerous('rm -fr /').level).toBe('hardline');
+});
+
+test('dangerous 覆盖长格式 rm 与 find -delete', () => {
+  expect(detectDangerous('rm --recursive ./build').level).toBe('dangerous');
+  expect(detectDangerous('find . -name "*.tmp" -delete').level).toBe('dangerous');
+});
+
+test('dd of=/dev/null 不算 hardline', () => {
+  expect(detectDangerous('dd if=/dev/zero of=/dev/null bs=1M count=1').level).not.toBe('hardline');
+});
+
+test('load 缺失文件 → 空集不崩(允许 safe)', async () => {
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: join(tmpdir(), 'definitely-missing-xyz', 'allowlist.json') });
+  expect((await g.check('ls')).allowed).toBe(true);
 });
