@@ -23,7 +23,8 @@
 | 2.5 | 命令审批 / 安全 | ✅ 完成 |
 | — | Terminal 后端(docker/ssh) | ⏸️ 计划 |
 | — | Web 工具(web_search/web_extract) | ⏸️ 计划 |
-| 3 | 记忆 + 技能(自进化) | ⏸️ 计划 |
+| 3a | 记忆(MemoryStore + memory 工具 + 系统提示注入) | ✅ 完成 |
+| 3b | session_search(会话全文搜索) + 技能(自进化) | ⏸️ 计划 |
 | 4 | 完整 CLI / TUI | ⏸️ 计划 |
 | 5 | MCP / Cron / 委派子代理 | ⏸️ 计划 |
 | 6 | 网关(Telegram/Discord/...) | ⏸️ 计划 |
@@ -113,14 +114,26 @@
 
 ---
 
-## 阶段 3:记忆 + 技能(自进化) ⏸️
+## 阶段 3:记忆 + 技能(自进化)
 
-**目标**:hermes 的标志性"自进化"能力。
+hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(记忆,已完成)/ 3b(session_search + 技能,推迟)两个子阶段。
 
-**计划做(初步)**:
-- 记忆:`USER.md` / `MEMORY.md` 持久化、`memory` 工具、系统提示注入(prefetch)、FTS5 会话搜索(`session_search` 工具)
+### 阶段 3a:记忆 ✅
+
+**目标**:跨会话的持久记忆——agent 主动记、每轮注入。
+
+**已做(MVP)**:
+- **MemoryStore**(`@hermes/core`):`MEMORY.md`(agent 长期笔记,上限 2200 字)/ `USER.md`(用户画像,上限 1375 字)持久化,条目以 `§` 分隔,`add` / `replace` / `remove` / `getEntries` / `render`;超限需先删旧条目
+- **memory 工具**(`@hermes/tools/builtin/memory.ts`):暴露给模型,支持 add / replace / remove 操作
+- **memory toolset**:`TOOLSETS.memory = ['memory']`,并入 `core`
+- **系统提示注入**:每轮把两类记忆 `render()` 注入 system prompt,实现跨会话记忆
+- **paths.memoriesDir**:`~/.hermes-ts/memories/`(MEMORY.md / USER.md)
+
+### 阶段 3b:session_search + 技能 ⏸️ 推迟
+
+**计划做**:
+- 记忆:FTS5 会话全文搜索(`session_search` 工具,messages 表结构已预留)
 - 技能:技能加载、`skills`/`skill_view`/`skill_manage` 工具、技能内容注入系统提示、后台技能自改进
-> 注:记忆与技能各自较大,届时可能再拆成 3a/3b 两个子阶段。
 
 ---
 
@@ -160,13 +173,15 @@
 
 - 工具均本地执行,无远程后端
 - 无 web/vision/browser 等外部依赖工具
-- 无上下文压缩 / 无重试降级 / 无记忆与技能
+- 无上下文压缩 / 无重试降级
+- 跨会话记忆已支持(memory 工具 + 系统提示注入);但无 session 全文搜索(`session_search`,阶段 3b);无技能系统
 - 仅 GLM provider(抽象已就绪,加新 provider 只需新增实现)
 
 ## 运维备忘
 
 - HERMES_HOME = `~/.hermes-ts`(避免与 Python 版 `~/.hermes` 冲突)
 - 命令审批白名单(`always` 永久放行)持久化在 `~/.hermes-ts/allowlist.json`
+- 记忆持久化在 `~/.hermes-ts/memories/`(MEMORY.md / USER.md)
 - `better-sqlite3` 预编译二进制从 GitHub CDN 拉取偶发 ECONNRESET;根 `package.json` 的 `pnpm.onlyBuiltDependencies` 已允许其构建,失败可重试或用 C++ 工具链编译
 - GLM 端点按 Key 来源:智谱开放平台 `https://open.bigmodel.cn/api/paas/v4`;GLM Coding Plan(z.ai)`https://api.z.ai/api/coding/paas/v4`
 - 每阶段开工前先实测基线 `pnpm vitest run` 是否全绿(用户可能在会话间自行向 main 提交改动)

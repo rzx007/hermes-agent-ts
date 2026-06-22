@@ -11,7 +11,7 @@
 
 - **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
-- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` + 命令审批（危险命令需确认）
+- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / memory / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` / `memory` + 命令审批（危险命令需确认）+ 记忆工具（memory）
 - **@hermes/agent** — ConversationLoop 核心循环（流式、工具循环、落库、中断、maxIterations 守卫）
 - **@hermes/cli** — readline REPL（`/new` `/tools` `/exit` `/help`，流式渲染，Ctrl+C 中断）
 
@@ -78,6 +78,22 @@ HERMES_ENABLED_TOOLSETS=file
   - `HERMES_APPROVAL_MODE=off` — 关闭审批提示（危险命令直接放行，但 HARDLINE 仍然拦截）；
   - `HERMES_YOLO_MODE=1` — 等同于 `off`（但 HARDLINE 仍然拦截）。
 
+## 记忆 (Memory)
+
+agent 具备跨会话的持久记忆，分两类文件，持久化在 `~/.hermes-ts/memories/`：
+
+- `MEMORY.md`（agent 的长期笔记，上限 2200 字）— 模型主动记下的事实、约定、上下文。
+- `USER.md`（用户画像，上限 1375 字）— 关于当前用户的偏好与信息。
+
+机制：
+
+- 每条记忆为一行，文件内以 `§` 分隔条目持久化。
+- 模型通过 `memory` 工具主动维护记忆，支持 `add`（新增）/ `replace`（替换某条）/ `remove`（删除某条）三种操作。
+- 每一轮对话开始时，两类记忆会被注入 system prompt，从而实现跨会话记忆。
+- 字数超过上限时需先删除旧条目（remove）再写入新内容。
+
+> 说明：跨会话的全文检索（`session_search`）仍在计划中（阶段 3b）。
+
 ## 运行
 
 ```bash
@@ -124,5 +140,6 @@ docs/superpowers/
 
 - 工具均为本地执行；尚无远程终端后端（docker/ssh，后续阶段）
 - 无 web/vision/browser 等外部依赖工具（后续阶段）
-- 无上下文压缩 / 无重试降级 / 无记忆与技能系统（后续阶段）
+- 无上下文压缩 / 无重试降级（后续阶段）
+- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；但跨会话全文搜索（`session_search`）仍未实现（阶段 3b），技能系统亦未实现（后续阶段）
 - 仅支持 GLM provider（Provider 抽象已就绪，加新 provider 只需新增实现）
