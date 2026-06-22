@@ -9,6 +9,7 @@
   "dependencies": {
     "@hermes/core": "workspace:*",
     "@hermes/providers": "workspace:*",
+    "fast-glob": "^3.3.0",
     "zod": "^3.23.0",
     "zod-to-json-schema": "^3.25.0"
   }
