@@ -6,11 +6,11 @@
 
 一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的最小可用 AI 代理。
 
-- **@hermes/core** — 核心类型、`~/.hermes` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
+- **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
-- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 内置工具 `read_file` / `write_file` / `terminal`
+- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal`
 - **@hermes/agent** — ConversationLoop 核心循环（流式、工具循环、落库、中断、maxIterations 守卫）
-- **@hermes/cli** — readline REPL（`/new` `/exit` `/help`，流式渲染，Ctrl+C 中断）
+- **@hermes/cli** — readline REPL（`/new` `/tools` `/exit` `/help`，流式渲染，Ctrl+C 中断）
 
 ## 技术栈
 
@@ -36,7 +36,25 @@ cp .env.example .env
 # HERMES_MODEL=glm-4.6
 ```
 
-也可用 `~/.hermes/config.yaml`（env 优先）。
+也可用 `~/.hermes-ts/config.yaml`（env 优先）。
+
+## 工具集配置 (Toolsets)
+
+内置工具按「工具集」分组，可通过环境变量按需启用/禁用（逗号分隔，默认全部启用）：
+
+```bash
+# 禁用终端工具集（其余照常启用）
+HERMES_DISABLED_TOOLSETS=terminal
+
+# 仅启用文件工具集
+HERMES_ENABLED_TOOLSETS=file
+```
+
+- `HERMES_ENABLED_TOOLSETS` — 留空（默认）= 启用全部已注册工具；指定后仅启用列出的工具集。
+- `HERMES_DISABLED_TOOLSETS` — 在已启用集合中再剔除这些工具集。
+- 可用工具集：`file`（read_file/write_file/edit_file/search_files/list_dir）、`terminal`（terminal）、`core`（= file + terminal），以及保留名 `all` / `*`（展开为全部）。
+- 计算顺序：`enabled` 取并集 → 再减去 `disabled` → 末尾与实际注册的工具取交集。
+- CLI 内输入 `/tools` 可查看当前会话实际启用的工具列表。
 
 ## 运行
 
@@ -44,7 +62,7 @@ cp .env.example .env
 pnpm cli          # 启动交互式 CLI（hermes-ts）
 ```
 
-进入后直接输入对话；斜杠命令：`/new` 新会话、`/exit` 退出、`/help` 帮助。会话历史持久化在 `~/.hermes/sessions.db`。
+进入后直接输入对话；斜杠命令：`/new` 新会话、`/tools` 查看启用工具、`/exit` 退出、`/help` 帮助。会话历史持久化在 `~/.hermes-ts/sessions.db`。
 
 ## 测试
 
@@ -59,7 +77,7 @@ pnpm typecheck    # 全包 tsc --noEmit
 packages/
   core/        @hermes/core      类型 / 配置 / 日志 / SessionDB
   providers/   @hermes/providers Provider 抽象 + OpenAI 兼容客户端 + GLM
-  tools/       @hermes/tools     ToolRegistry + 内置工具
+  tools/       @hermes/tools     ToolRegistry + 工具集(Toolsets) + 内置工具
   agent/       @hermes/agent     ConversationLoop
 apps/
   cli/         @hermes/cli       readline REPL（bin: hermes-ts）
@@ -76,7 +94,7 @@ docs/superpowers/
 
 ## 路线图
 
-阶段 1（核心代理）✅ → 2 工具系统/终端后端 → 3 记忆+技能 → 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
+阶段 1（核心代理）✅ → 阶段 2（工具系统：工具集分组 + file/terminal/core + edit_file/search_files/list_dir）✅ → 3 记忆+技能 → 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
 
 设计与计划见 `docs/superpowers/`。
 
