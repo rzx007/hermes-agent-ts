@@ -1,5 +1,12 @@
 import { test, expect } from 'vitest';
-import { detectDangerous } from './approval.js';
+import { detectDangerous, ApprovalGuard } from './approval.js';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+function tmpAllowlist(): string {
+  return join(mkdtempSync(join(tmpdir(), 'hermes-allow-')), 'allowlist.json');
+}
 
 test('hardline:rm -rf / / mkfs / fork bomb / dd of=/dev', () => {
   expect(detectDangerous('rm -rf /').level).toBe('hardline');
@@ -26,4 +33,60 @@ test('safe:ls / echo / git status / rm 单文件', () => {
 test('命中返回描述', () => {
   const d = detectDangerous('rm -rf /');
   expect(d.desc).toBeTruthy();
+});
+
+test('safe 命令直接放行', async () => {
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: tmpAllowlist() });
+  expect((await g.check('ls')).allowed).toBe(true);
+});
+
+test('hardline 永禁(即使 mode=off)', async () => {
+  const g = new ApprovalGuard({ mode: 'off', allowlistPath: tmpAllowlist() });
+  const v = await g.check('rm -rf /');
+  expect(v.allowed).toBe(false);
+  expect(v.reason).toContain('hardline');
+});
+
+test('off 放行 dangerous', async () => {
+  const g = new ApprovalGuard({ mode: 'off', allowlistPath: tmpAllowlist() });
+  expect((await g.check('rm -rf ./x')).allowed).toBe(true);
+});
+
+test('manual + 无 prompt + dangerous → 拒绝', async () => {
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: tmpAllowlist() });
+  expect((await g.check('rm -rf ./x')).allowed).toBe(false);
+});
+
+test('deny 阻止;once 放行但不记忆', async () => {
+  const path = tmpAllowlist();
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: path, prompt: async () => 'deny' });
+  expect((await g.check('rm -rf ./x')).allowed).toBe(false);
+  const g2 = new ApprovalGuard({ mode: 'manual', allowlistPath: path, prompt: async () => 'once' });
+  expect((await g2.check('rm -rf ./x')).allowed).toBe(true);
+  expect(existsSync(path)).toBe(false);
+});
+
+test('session 放行且本会话再次免提示', async () => {
+  let prompts = 0;
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: tmpAllowlist(), prompt: async () => { prompts++; return 'session'; } });
+  expect((await g.check('rm -rf ./x')).allowed).toBe(true);
+  expect((await g.check('rm -rf ./x')).allowed).toBe(true);
+  expect(prompts).toBe(1);
+});
+
+test('always 放行且持久化,新 guard 加载后免提示', async () => {
+  const path = tmpAllowlist();
+  let prompts = 0;
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: path, prompt: async () => { prompts++; return 'always'; } });
+  expect((await g.check('rm -rf ./keep')).allowed).toBe(true);
+  expect(JSON.parse(readFileSync(path, 'utf8')).commands).toContain('rm -rf ./keep');
+  const g2 = new ApprovalGuard({ mode: 'manual', allowlistPath: path, prompt: async () => { prompts++; return 'deny'; } });
+  expect((await g2.check('rm -rf ./keep')).allowed).toBe(true);
+  expect(prompts).toBe(1);
+});
+
+test('损坏的 allowlist 文件 → 空集不崩', async () => {
+  const path = tmpAllowlist();
+  writeFileSync(path, '{ not json');
+  expect(() => new ApprovalGuard({ mode: 'manual', allowlistPath: path })).not.toThrow();
 });
