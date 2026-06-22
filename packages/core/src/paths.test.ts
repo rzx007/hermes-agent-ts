@@ -9,13 +9,13 @@ test('getHermesHome 尊重 HERMES_HOME 环境变量', () => {
   expect(dir).toBe('/tmp/custom-hermes');
 });
 
-test('getHermesHome 默认回退到 ~/.hermes', () => {
+test('getHermesHome 默认回退到 ~/.hermes-ts', () => {
   const dir = getHermesHome({ HOME: '/home/u' });
-  expect(dir.replace(/\\/g, '/')).toBe('/home/u/.hermes');
+  expect(dir.replace(/\\/g, '/')).toBe('/home/u/.hermes-ts');
 });
 
 test('sessionDbPath 在 hermes home 下指向 sessions.db', () => {
-  expect(sessionDbPath({ HOME: '/home/u' }).replace(/\\/g, '/')).toBe('/home/u/.hermes/sessions.db');
+  expect(sessionDbPath({ HOME: '/home/u' }).replace(/\\/g, '/')).toBe('/home/u/.hermes-ts/sessions.db');
 });
 
 test('ensureHermesHome 创建目录并返回路径', () => {
