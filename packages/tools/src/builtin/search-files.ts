@@ -10,10 +10,10 @@ const MAX_BYTES = 50 * 1024;
 
 export const searchFilesTool = defineTool({
   name: 'search_files',
-  description: '搜索文件。content 模式:按正则搜内容,返回 路径:行号: 匹配行。filename 模式:按 glob 搜文件名。',
+  description: '搜索文件(忽略 node_modules/.git/dist 与 dotfile)。content 模式:按正则搜内容,返回 路径:行号: 匹配行。filename 模式:按 glob 搜文件名。',
   toolset: 'file',
   schema: z.object({
-    pattern: z.string().describe('content 模式=正则;filename 模式=glob 或子串'),
+    pattern: z.string().describe('content 模式=正则;filename 模式=glob(如 **/*.ts 或 *foo*)'),
     path: z.string().optional().describe('搜索根目录,默认 cwd'),
     mode: z.enum(['content', 'filename']).optional().describe('默认 content'),
     glob: z.string().optional().describe('content 模式下限定文件范围,如 **/*.ts'),
@@ -22,7 +22,7 @@ export const searchFilesTool = defineTool({
     const root = resolve(ctx.cwd, path ?? '.');
 
     if (mode === 'filename') {
-      const files = await fg(pattern, { cwd: root, ignore: IGNORE, dot: false });
+      const files = await fg(pattern, { cwd: root, ignore: IGNORE, dot: false, onlyFiles: true });
       if (files.length === 0) return '无匹配';
       const shown = files.slice(0, MAX_MATCHES);
       const suffix = files.length > shown.length ? `\n... [共 ${files.length} 个,已截断]` : '';
@@ -56,7 +56,7 @@ export const searchFilesTool = defineTool({
             break;
           }
           lines.push(entry);
-          bytes += entry.length;
+          bytes += Buffer.byteLength(entry, 'utf8');
         }
       }
       if (truncated) break;

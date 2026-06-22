@@ -48,3 +48,9 @@ test('无匹配返回提示', async () => {
 test('无效正则抛错', async () => {
   await expect(searchFilesTool.handler({ pattern: '(' }, ctx())).rejects.toThrow();
 });
+
+test('content 模式跳过 dotfile', async () => {
+  writeFileSync(join(dir, '.env'), 'SECRET=foo');
+  const out = await searchFilesTool.handler({ pattern: 'foo' }, ctx());
+  expect(out).not.toContain('.env');
+});
