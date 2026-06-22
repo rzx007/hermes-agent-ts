@@ -11,6 +11,7 @@ export interface HermesConfig {
   maxIterations: number;
   enabledToolsets?: string[];
   disabledToolsets?: string[];
+  approvalMode?: 'manual' | 'off';
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
@@ -22,6 +23,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
     return undefined;
   };
   const provider = env.HERMES_PROVIDER ?? fromFile.provider ?? 'glm';
+  const isTruthy = (v: string | undefined): boolean =>
+    v !== undefined && ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
+  const approvalMode: 'manual' | 'off' = isTruthy(env.HERMES_YOLO_MODE)
+    ? 'off'
+    : ((env.HERMES_APPROVAL_MODE ?? fromFile.approvalMode) === 'off' ? 'off' : 'manual');
   return {
     provider,
     model: env.HERMES_MODEL ?? fromFile.model ?? 'glm-4.6',
@@ -30,5 +36,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
     maxIterations: Number(env.HERMES_MAX_ITERATIONS || fromFile.maxIterations || 25),
     enabledToolsets: parseList(env.HERMES_ENABLED_TOOLSETS, fromFile.enabledToolsets),
     disabledToolsets: parseList(env.HERMES_DISABLED_TOOLSETS, fromFile.disabledToolsets),
+    approvalMode,
   };
 }

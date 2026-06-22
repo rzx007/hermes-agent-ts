@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { getHermesHome, sessionDbPath, ensureHermesHome } from './paths.js';
+import { getHermesHome, sessionDbPath, ensureHermesHome, allowlistPath } from './paths.js';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,4 +23,8 @@ test('ensureHermesHome 创建目录并返回路径', () => {
   const dir = ensureHermesHome({ HERMES_HOME: join(base, 'h') });
   expect(existsSync(dir)).toBe(true);
   rmSync(base, { recursive: true, force: true });
+});
+
+test('allowlistPath 在 hermes home 下指向 allowlist.json', () => {
+  expect(allowlistPath({ HOME: '/home/u' }).replace(/\\/g, '/')).toBe('/home/u/.hermes-ts/allowlist.json');
 });

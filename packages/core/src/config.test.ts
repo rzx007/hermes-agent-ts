@@ -23,3 +23,13 @@ test('loadConfig 未设置时 toolsets 为 undefined', () => {
   expect(c.enabledToolsets).toBeUndefined();
   expect(c.disabledToolsets).toBeUndefined();
 });
+
+test('HERMES_YOLO_MODE 真值 → approvalMode off', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_YOLO_MODE: '1' } as NodeJS.ProcessEnv).approvalMode).toBe('off');
+});
+test('HERMES_APPROVAL_MODE=off → off', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_APPROVAL_MODE: 'off' } as NodeJS.ProcessEnv).approvalMode).toBe('off');
+});
+test('默认 approvalMode = manual', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k' } as NodeJS.ProcessEnv).approvalMode).toBe('manual');
+});
