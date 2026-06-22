@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-21-hermes-ts-phase2-toolsets-file-tools-design.md`
 
-**前置状态:** 阶段 1 已完成并合并。当前在 `phase2-toolsets-file-tools` 分支。已有 39 测试全绿。内部包指向源码解析(无需 build 依赖)。工具用 `defineTool` 定义,`registry.call` 捕获工具异常转错误字符串回灌模型。
+**前置状态:** 阶段 1 已完成并合并。当前在 `phase2-toolsets-file-tools` 分支,基线已实测 **39 测试全绿**(已修复 `paths.test.ts` 对齐 `~/.hermes-ts` 的基线红)。内部包指向源码解析(无需 build 依赖)。工具用 `defineTool` 定义,`registry.call` 捕获工具异常转错误字符串回灌模型。注意:HERMES_HOME 现为 `~/.hermes-ts`(非 `~/.hermes`)。
 
 ---
 
@@ -197,8 +197,10 @@ export const TOOLSETS: Record<string, Toolset> = {
 export function resolveToolset(name: string, visited: Set<string> = new Set()): string[] {
   if (name === 'all' || name === '*') {
     const acc = new Set<string>();
+    // 每个顶层 toolset 用独立 visited 完整展开,避免共享 visited 在未来
+    // 「某工具仅经 includes 可达」的形状下被错误跳过
     for (const key of Object.keys(TOOLSETS)) {
-      for (const t of resolveToolset(key, visited)) acc.add(t);
+      for (const t of resolveToolset(key, new Set())) acc.add(t);
     }
     return [...acc];
   }
@@ -440,7 +442,7 @@ test('filename 模式返回路径列表', async () => {
 });
 
 test('无匹配返回提示', async () => {
-  const out = await searchFilesTool.handler({ pattern: 'zzzznومatch' }, ctx());
+  const out = await searchFilesTool.handler({ pattern: 'zzzznomatch_xyzqq' }, ctx());
   expect(out).toContain('无匹配');
 });
 
@@ -671,10 +673,17 @@ git commit -m "feat(tools): list_dir 工具 + 注册 edit_file/search_files/list
 `packages/core/src/config.test.ts`（新建;若已存在则追加）:
 ```ts
 import { test, expect } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadConfig } from './config.js';
+
+// 用一个不存在 config.yaml 的临时 HERMES_HOME,确保测试不读到用户真实配置(hermetic)
+const HOME = () => ({ HERMES_HOME: mkdtempSync(join(tmpdir(), 'hermes-cfg-')) });
 
 test('loadConfig 解析 HERMES_ENABLED/DISABLED_TOOLSETS 逗号分隔', () => {
   const c = loadConfig({
+    ...HOME(),
     GLM_API_KEY: 'k',
     HERMES_ENABLED_TOOLSETS: 'file, terminal',
     HERMES_DISABLED_TOOLSETS: 'terminal',
@@ -684,7 +693,7 @@ test('loadConfig 解析 HERMES_ENABLED/DISABLED_TOOLSETS 逗号分隔', () => {
 });
 
 test('loadConfig 未设置时 toolsets 为 undefined', () => {
-  const c = loadConfig({ GLM_API_KEY: 'k' } as NodeJS.ProcessEnv);
+  const c = loadConfig({ ...HOME(), GLM_API_KEY: 'k' } as NodeJS.ProcessEnv);
   expect(c.enabledToolsets).toBeUndefined();
   expect(c.disabledToolsets).toBeUndefined();
 });
@@ -706,7 +715,7 @@ Expected: FAIL
 ```ts
   const parseList = (v: string | undefined, fileVal: unknown): string[] | undefined => {
     if (v !== undefined && v.trim() !== '') return v.split(',').map((s) => s.trim()).filter(Boolean);
-    if (Array.isArray(fileVal)) return fileVal as string[];
+    if (Array.isArray(fileVal)) return (fileVal as unknown[]).map(String);
     return undefined;
   };
 ```
@@ -753,13 +762,14 @@ test('toolNames 限定暴露给 provider 的工具', async () => {
   const { db, deps } = makeDeps(provider);
   // makeDeps 注册了 read_file;再注册一个 terminal 以便区分
   deps.registry.register({ name: 'terminal', description: 't', toolset: 'terminal', schema: z.object({}), handler: async () => 'x' });
-  deps.toolNames = ['read_file']; // 只暴露 read_file
+  // 用展开构造带 toolNames 的新 deps(makeDeps 返回的是 inferred 字面量,不能直接赋 toolNames)
+  const filtered = { ...deps, toolNames: ['read_file'] }; // 只暴露 read_file
   const s = db.createSession();
-  for await (const _ of runConversation(deps, s.id, 'hi', { cwd: '/', logger: createLogger('t') })) { /* drain */ }
+  for await (const _ of runConversation(filtered, s.id, 'hi', { cwd: '/', logger: createLogger('t') })) { /* drain */ }
   expect(seen[0]).toEqual(['read_file']);
 });
 ```
-（注:`makeDeps` 的 `deps` 已含 registry;`LoopDeps` 当前无 `toolNames`,赋值会先 typecheck 失败 → 正是红。）
+（注:不要写 `deps.toolNames = ...` —— `makeDeps` 返回的 `deps` 是 inferred 字面量类型,没有 `toolNames` 属性,直接赋值会 `tsc` 报错。用 `{ ...deps, toolNames: [...] }` 新建对象,其类型含 `toolNames` 且满足 `LoopDeps`。在 Step 3 给 `LoopDeps` 加上 `toolNames?` 后,`runConversation(filtered, ...)` 即通过。Step 2 的红来自:Step 3 尚未实现过滤,`seen[0]` 仍是全部工具名 → 断言失败。)
 
 - [ ] **Step 2: 运行确认失败**
 
