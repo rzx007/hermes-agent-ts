@@ -21,3 +21,7 @@ export function sessionDbPath(env: NodeJS.ProcessEnv = process.env): string {
 export function allowlistPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(getHermesHome(env), 'allowlist.json');
 }
+
+export function memoriesDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(getHermesHome(env), 'memories');
+}
