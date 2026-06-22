@@ -2,12 +2,27 @@ import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import pc from 'picocolors';
 import { runConversation, type LoopDeps } from '@hermes/agent';
-import type { ToolContext } from '@hermes/tools';
+import { ApprovalGuard, type ToolContext } from '@hermes/tools';
+import { allowlistPath } from '@hermes/core';
 
-export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>) {
+export interface ReplOptions { approvalMode: 'manual' | 'off' }
+
+export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, options: ReplOptions) {
   const { db } = deps;
   let session = db.createSession({ source: 'cli', modelConfig: { provider: deps.provider.name, model: deps.model } });
   const rl = readline.createInterface({ input: stdin, output: stdout });
+
+  const guard = new ApprovalGuard({
+    mode: options.approvalMode,
+    allowlistPath: allowlistPath(),
+    logger: ctx.logger,
+    prompt: async ({ command, description }) => {
+      console.log(pc.yellow(`\n⚠️ 危险命令:${description}`));
+      console.log(pc.dim(`    ${command}`));
+      const ans = (await rl.question(pc.cyan('  [o]nce / [s]ession / [a]lways / [d]eny ▸ '))).trim().toLowerCase();
+      return ans === 'a' ? 'always' : ans === 's' ? 'session' : ans === 'o' ? 'once' : 'deny';
+    },
+  });
 
   rl.on('SIGINT', () => {
     console.log(pc.yellow('\n退出 Hermes'));
@@ -47,7 +62,7 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>) {
     process.on('SIGINT', onSig);
 
     try {
-      for await (const ev of runConversation(deps, session.id, line, { ...ctx, signal: controller.signal })) {
+      for await (const ev of runConversation(deps, session.id, line, { ...ctx, signal: controller.signal, approval: guard })) {
         switch (ev.type) {
           case 'assistant_delta': stdout.write(ev.text); break;
           case 'tool_call': console.log(pc.dim(`\n⚙ ${ev.name}(${truncate(ev.args, 300)})`)); break;

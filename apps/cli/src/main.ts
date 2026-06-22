@@ -33,7 +33,7 @@ async function main() {
 
   const deps = { db, provider, registry, model: config.model, maxIterations: config.maxIterations, toolNames };
   try {
-    await repl(deps, { cwd: process.cwd(), logger });
+    await repl(deps, { cwd: process.cwd(), logger }, { approvalMode: config.approvalMode ?? 'manual' });
   } finally {
     db.close();
   }
