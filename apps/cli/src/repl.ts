@@ -62,7 +62,7 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
     process.on('SIGINT', onSig);
 
     try {
-      for await (const ev of runConversation(deps, session.id, line, { ...ctx, signal: controller.signal, approval: guard, memory: deps.memory, sessionDb: deps.db })) {
+      for await (const ev of runConversation(deps, session.id, line, { ...ctx, signal: controller.signal, approval: guard, memory: deps.memory, sessionDb: deps.db, skills: deps.skills })) {
         switch (ev.type) {
           case 'assistant_delta': stdout.write(ev.text); break;
           case 'tool_call': console.log(pc.dim(`\n⚙ ${ev.name}(${truncate(ev.args, 300)})`)); break;

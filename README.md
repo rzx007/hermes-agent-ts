@@ -2,7 +2,7 @@
 
 用 TypeScript 复刻 [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent)（原项目为 Python）。**架构级对齐 + 惯用 TS 重写**，分阶段推进。
 
-## 当前状态：阶段 3b（会话全文搜索）✅
+## 当前状态：阶段 3b（会话全文搜索）✅ + 技能（只读）✅
 
 一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的可用 AI 代理：具备工具集分组、一套本地文件/代码工具（读、写、精确编辑、搜索、列目录、执行命令）、危险命令审批、跨会话长期记忆,以及跨会话历史全文搜索。
 
@@ -11,10 +11,11 @@
 - 阶段 2.5（命令审批）✅ — 危险命令审批 + hardline 永禁 + 白名单
 - 阶段 3a（记忆系统）✅ — `MEMORY.md` / `USER.md` + `memory` 工具 + 系统提示注入
 - 阶段 3b（会话全文搜索）✅ — SessionDB trigram FTS5 + `session_search` 工具 + `search` 工具集
+- 技能 a（只读技能）✅ — SkillStore + `skill_view` 工具 + `skills` 工具集 + 技能索引注入 system prompt
 
 - **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
-- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / memory / search / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` / `memory` / `session_search` + 命令审批（危险命令需确认）+ 记忆工具（memory）+ 会话全文搜索工具（session_search）
+- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / memory / search / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` / `memory` / `session_search` / `skill_view` + 命令审批（危险命令需确认）+ 记忆工具（memory）+ 会话全文搜索工具（session_search）+ 技能查看工具（skill_view）
 - **@hermes/agent** — ConversationLoop 核心循环（流式、工具循环、落库、中断、maxIterations 守卫）
 - **@hermes/cli** — readline REPL（`/new` `/tools` `/exit` `/help`，流式渲染，Ctrl+C 中断）
 
@@ -62,7 +63,7 @@ HERMES_ENABLED_TOOLSETS=file
 
 - `HERMES_ENABLED_TOOLSETS` — 留空（默认）= 启用全部已注册工具；指定后仅启用列出的工具集。
 - `HERMES_DISABLED_TOOLSETS` — 在已启用集合中再剔除这些工具集。
-- 可用工具集：`file`（read_file/write_file/edit_file/search_files/list_dir）、`terminal`（terminal）、`core`（= file + terminal），以及保留名 `all` / `*`（展开为全部）。
+- 可用工具集：`file`（read_file/write_file/edit_file/search_files/list_dir）、`terminal`（terminal）、`memory`（memory）、`search`（session_search）、`skills`（skill_view）、`core`（= file + terminal + memory + search + skills），以及保留名 `all` / `*`（展开为全部）。
 - 计算顺序：`enabled` 取并集 → 再减去 `disabled` → 末尾与实际注册的工具取交集。
 - CLI 内输入 `/tools` 可查看当前会话实际启用的工具列表。
 
@@ -105,6 +106,16 @@ agent 可对历史会话做跨会话全文搜索：
 - 杜绝 FTS 语法注入：查询经 `sanitizeFtsQuery` 当作字面短语处理。
 - 归入 `search` 工具集（并入 `core`）。
 
+## 技能 (Skills)
+
+agent 具备只读的「技能」（程序性知识）：
+
+- 技能以 `~/.hermes-ts/skills/<name>/SKILL.md` 存储（frontmatter 的 `name`/`description` + 正文）。
+- 启动时递归扫描技能目录，技能索引（name + description，按目录分类）注入 system prompt。
+- 模型用 `skill_view` 工具按名读取技能正文（操作步骤 / 最佳实践）。
+- 归入 `skills` 工具集（并入 `core`）。
+- 创建 / 编辑技能（`skill_manage`）与后台技能自改进留待后续阶段。
+
 ## 运行
 
 ```bash
@@ -143,7 +154,7 @@ docs/superpowers/
 
 ## 路线图
 
-阶段 1（核心代理）✅ → 阶段 2（工具系统）✅ → 阶段 2.5（命令审批）✅ → 阶段 3a（记忆系统）✅ → 阶段 3b（session_search 全文搜索）✅ → 技能系统（自进化，下一步）→ 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
+阶段 1（核心代理）✅ → 阶段 2（工具系统）✅ → 阶段 2.5（命令审批）✅ → 阶段 3a（记忆系统）✅ → 阶段 3b（session_search 全文搜索）✅ → 技能 a（只读技能）✅ → 技能 b（skill_manage + 自改进，下一步）→ 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
 
 设计与计划见 `docs/superpowers/`。
 
@@ -152,5 +163,5 @@ docs/superpowers/
 - 工具均为本地执行；尚无远程终端后端（docker/ssh，后续阶段）
 - 无 web/vision/browser 等外部依赖工具（后续阶段）
 - 无上下文压缩 / 无重试降级（后续阶段）
-- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；跨会话全文搜索已支持（`session_search` 工具，阶段 3b）；技能系统（自进化）仍未实现（后续阶段）
+- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；跨会话全文搜索已支持（`session_search` 工具，阶段 3b）；只读技能已支持（SkillStore + `skill_view` + 技能索引注入，技能 a）；技能创建/编辑（`skill_manage`）与自改进仍未实现（技能 b，后续阶段）
 - 仅支持 GLM provider（Provider 抽象已就绪，加新 provider 只需新增实现）

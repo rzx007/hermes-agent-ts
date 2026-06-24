@@ -25,7 +25,8 @@
 | — | Web 工具(web_search/web_extract) | ⏸️ 计划 |
 | 3a | 记忆(MemoryStore + memory 工具 + 系统提示注入) | ✅ 完成 |
 | 3b | session_search(会话全文搜索) | ✅ 完成 |
-| — | 技能系统(自进化) | ⏸️ 计划 |
+| 技能 a | 只读技能:SkillStore + skill_view + 索引注入 | ✅ 完成 |
+| 技能 b | skill_manage + 自改进 | ⏸️ 计划 |
 | 4 | 完整 CLI / TUI | ⏸️ 计划 |
 | 5 | MCP / Cron / 委派子代理 | ⏸️ 计划 |
 | 6 | 网关(Telegram/Discord/...) | ⏸️ 计划 |
@@ -117,7 +118,7 @@
 
 ## 阶段 3:记忆 + 技能(自进化)
 
-hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(记忆,已完成)/ 3b(session_search + 技能,推迟)两个子阶段。
+hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(记忆,已完成)/ 3b(session_search,已完成)/ 技能 a(只读技能,已完成)/ 技能 b(skill_manage + 自改进,推迟)等子阶段。
 
 ### 阶段 3a:记忆 ✅
 
@@ -142,9 +143,21 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - **search toolset**:`TOOLSETS.search = ['session_search']`,并入 `core`
 - **接线**:`ToolContext.sessionDb?: SessionDB`(可选,不注入即「不可用」);CLI 每轮注入 `sessionDb: deps.db`(沿用 memory/approval 模式)
 
-### 技能系统(自进化) ⏸️ 推迟
+### 技能 a:只读技能 ✅
 
-**计划做**:技能加载、`skills`/`skill_view`/`skill_manage` 工具、技能内容注入系统提示、后台技能自改进。
+**目标**:让 agent 拥有可复用的「技能」(程序性知识)——启动时加载、索引注入系统提示、按需读取正文。
+
+**已做(MVP)**:
+- **SkillStore**(`@hermes/core/skill-store.ts`):递归扫描技能目录,解析 `SKILL.md`(frontmatter `name`/`description` + 正文),按目录分类,重名/解析失败 warn 后跳过;`list` / `getContent` / `renderIndex`
+- **skill_view 工具**(`@hermes/tools/builtin/skills.ts`):暴露给模型,按名读取技能正文;无 `ctx.skills` 返回「不可用」,未找到列出可用技能名
+- **skills toolset**:`TOOLSETS.skills = ['skill_view']`,并入 `core`
+- **系统提示注入**:每轮把技能索引(name + description,按分类)`renderIndex()` 注入 system prompt
+- **paths.skillsDir**:`~/.hermes-ts/skills/`(`<name>/SKILL.md`)
+- **接线**:`ToolContext.skills?: SkillStore`;CLI 启动建 SkillStore、每轮注入 `skills: deps.skills`(沿用 memory/session_search 模式)
+
+### 技能 b:skill_manage + 自改进 ⏸️ 推迟
+
+**计划做**:`skill_manage` 工具(创建/编辑技能)、后台技能自改进(从会话轨迹提炼新技能/修订旧技能)。
 
 ---
 
@@ -190,7 +203,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - 工具均本地执行,无远程后端
 - 无 web/vision/browser 等外部依赖工具
 - 无上下文压缩 / 无重试降级
-- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);技能系统(自进化)尚未实现
+- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);只读技能已支持(SkillStore + `skill_view` + 技能索引注入,技能 a);技能创建/编辑(`skill_manage`)与自改进尚未实现(技能 b)
 - 仅 GLM provider(抽象已就绪,加新 provider 只需新增实现)
 
 ## 运维备忘
@@ -198,6 +211,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - HERMES_HOME = `~/.hermes-ts`(避免与 Python 版 `~/.hermes` 冲突)
 - 命令审批白名单(`always` 永久放行)持久化在 `~/.hermes-ts/allowlist.json`
 - 记忆持久化在 `~/.hermes-ts/memories/`(MEMORY.md / USER.md)
+- 技能存于 `~/.hermes-ts/skills/<name>/SKILL.md`(frontmatter name/description + 正文)
 - `better-sqlite3` 预编译二进制从 GitHub CDN 拉取偶发 ECONNRESET;根 `package.json` 的 `pnpm.onlyBuiltDependencies` 已允许其构建,失败可重试或用 C++ 工具链编译
 - GLM 端点按 Key 来源:智谱开放平台 `https://open.bigmodel.cn/api/paas/v4`;GLM Coding Plan(z.ai)`https://api.z.ai/api/coding/paas/v4`
 - 每阶段开工前先实测基线 `pnpm vitest run` 是否全绿(用户可能在会话间自行向 main 提交改动)
