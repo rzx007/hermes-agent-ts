@@ -164,6 +164,11 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 
 **计划做**:Gateway 主循环 + 平台适配器(Telegram 优先 → Discord/Slack/...)。跨平台会话路由。
 
+**并发设计要点(本阶段必须处理,提前记录以免遗忘)**:
+- **多会话并行的地基已具备**:ConversationLoop 是无全局状态的纯异步生成器(状态全在 deps/ctx 参数),SessionDB 按 session_id 行隔离,Node 单线程 + better-sqlite3 同步天然无进程内竞态。"单进程 + 多个 async 会话"(I/O 并发,多用户等模型)是 Node 最擅长的模型,可直接支撑。
+- **需补的两点**:① 共享单例(MemoryStore、ApprovalGuard 当前全局唯一,假设单用户)要改成**按 user_id 键控的注册表**(对应 Python 的 contextvars);② CLI 单 readline 入口要换成"每条入站消息 → 取/建该用户会话 → 跑一个 loop"的多路复用入口。
+- **多进程 / CPU 并行**(仅当真需要):SQLite WAL 允许 1 写者 + N 读者,多写者串行化、抢不到写锁会 `SQLITE_BUSY`(better-sqlite3 默认 5s timeout)。届时加 `busy_timeout` pragma + `SQLITE_BUSY` 重试包装,或改"单一进程持有 DB + 其它走 IPC/队列"。同步 API 的大查询/写入会阻塞事件循环,海量并发需并发上限/队列。`appendMessage` 已事务化 + `UNIQUE(session_id,seq)` 兜底,跨进程并发也只会让失败方报错而非写脏。
+
 ---
 
 ## 阶段 7:外围 ⏸️
