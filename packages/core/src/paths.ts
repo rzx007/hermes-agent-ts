@@ -25,3 +25,7 @@ export function allowlistPath(env: NodeJS.ProcessEnv = process.env): string {
 export function memoriesDir(env: NodeJS.ProcessEnv = process.env): string {
   return join(getHermesHome(env), 'memories');
 }
+
+export function skillsDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(getHermesHome(env), 'skills');
+}

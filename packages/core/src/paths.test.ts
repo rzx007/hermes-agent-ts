@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { getHermesHome, sessionDbPath, ensureHermesHome, allowlistPath, memoriesDir } from './paths.js';
+import { getHermesHome, sessionDbPath, ensureHermesHome, allowlistPath, memoriesDir, skillsDir } from './paths.js';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,4 +31,8 @@ test('allowlistPath 在 hermes home 下指向 allowlist.json', () => {
 
 test('memoriesDir 在 hermes home 下指向 memories', () => {
   expect(memoriesDir({ HOME: '/home/u' }).replace(/\\/g, '/')).toBe('/home/u/.hermes-ts/memories');
+});
+
+test('skillsDir 在 hermes home 下指向 skills', () => {
+  expect(skillsDir({ HOME: '/home/u' }).replace(/\\/g, '/')).toBe('/home/u/.hermes-ts/skills');
 });
