@@ -26,6 +26,21 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, seq);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_seq ON messages(session_id, seq);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, tokenize='trigram');
+
+CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages
+WHEN new.role IN ('user','assistant') BEGIN
+  INSERT INTO messages_fts(rowid, content) VALUES (new.id, COALESCE(new.content,''));
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+  DELETE FROM messages_fts WHERE rowid = old.id;
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+  DELETE FROM messages_fts WHERE rowid = old.id;
+  INSERT INTO messages_fts(rowid, content)
+    SELECT new.id, COALESCE(new.content,'') WHERE new.role IN ('user','assistant');
+END;
 `;
 
 interface SessionRow {
@@ -38,6 +53,20 @@ interface MessageRow {
   tool_call_id: string | null; name: string | null;
 }
 
+export interface SearchHit {
+  sessionId: string;
+  messageId: number;
+  role: string;
+  createdAt: number;
+  snippet: string;
+}
+
+export interface SessionBrief {
+  id: string;
+  startedAt: number;
+  preview: string;
+}
+
 export class SessionDB {
   private db: Database.Database;
 
@@ -45,6 +74,16 @@ export class SessionDB {
     this.db = new Database(path);
     this.db.pragma('journal_mode = WAL');
     this.db.exec(SCHEMA);
+    this.backfillFts();
+  }
+
+  private backfillFts(): void {
+    this.db.exec(
+      `INSERT INTO messages_fts(rowid, content)
+       SELECT id, COALESCE(content,'') FROM messages
+       WHERE role IN ('user','assistant')
+         AND id NOT IN (SELECT rowid FROM messages_fts)`,
+    );
   }
 
   createSession(opts: CreateSessionOpts = {}): Session {
@@ -105,6 +144,37 @@ export class SessionDB {
     const rows = this.db.prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT ?')
       .all(limit) as SessionRow[];
     return rows.map((r) => this.rowToSession(r));
+  }
+
+  searchMessages(query: string, limit = 30): SearchHit[] {
+    return this.db.prepare(
+      `SELECT m.session_id AS sessionId, m.id AS messageId, m.role AS role,
+              m.created_at AS createdAt,
+              snippet(messages_fts, 0, '[', ']', '…', 12) AS snippet
+       FROM messages_fts
+       JOIN messages m ON m.id = messages_fts.rowid
+       WHERE messages_fts MATCH ?
+       ORDER BY rank
+       LIMIT ?`,
+    ).all(query, limit) as SearchHit[];
+  }
+
+  browseSessions(limit = 10): SessionBrief[] {
+    return this.db.prepare(
+      `SELECT s.id AS id, s.started_at AS startedAt,
+              COALESCE((SELECT content FROM messages
+                        WHERE session_id = s.id AND role = 'user'
+                        ORDER BY seq LIMIT 1), '') AS preview
+       FROM sessions s
+       ORDER BY s.started_at DESC, s.rowid DESC
+       LIMIT ?`,
+
+    ).all(limit) as SessionBrief[];
+  }
+
+  /** 仅供测试/内部维护使用:执行任意 SQL。 */
+  rawExec(sql: string): void {
+    this.db.exec(sql);
   }
 
   close(): void { this.db.close(); }
