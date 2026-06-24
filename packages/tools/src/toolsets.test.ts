@@ -79,3 +79,9 @@ test('memory toolset 存在且 core 包含它', () => {
   expect(resolveToolset('memory')).toEqual(['memory']);
   expect(resolveToolset('core')).toContain('memory');
 });
+
+test('search toolset 存在且 core 包含它', () => {
+  expect(Object.keys(TOOLSETS)).toContain('search');
+  expect(resolveToolset('search')).toEqual(['session_search']);
+  expect(resolveToolset('core')).toContain('session_search');
+});

@@ -3,7 +3,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { Logger } from '@hermes/core';
 import type { ToolSchema } from '@hermes/providers';
 import type { ApprovalGuard } from './approval.js';
-import type { MemoryStore } from '@hermes/core';
+import type { MemoryStore, SessionDB } from '@hermes/core';
 
 export interface ToolContext {
   cwd: string;
@@ -11,6 +11,7 @@ export interface ToolContext {
   logger: Logger;
   approval?: ApprovalGuard;
   memory?: MemoryStore;
+  sessionDb?: SessionDB;
 }
 
 export interface ToolDef<T extends z.ZodTypeAny = z.ZodTypeAny> {

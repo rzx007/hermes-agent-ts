@@ -17,9 +17,13 @@ export const TOOLSETS: Record<string, Toolset> = {
     description: '长期记忆读写',
     tools: ['memory'],
   },
+  search: {
+    description: '会话历史搜索',
+    tools: ['session_search'],
+  },
   core: {
     description: '核心工具集',
-    includes: ['file', 'terminal', 'memory'],
+    includes: ['file', 'terminal', 'memory', 'search'],
   },
 };
 
