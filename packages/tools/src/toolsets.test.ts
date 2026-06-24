@@ -85,3 +85,9 @@ test('search toolset 存在且 core 包含它', () => {
   expect(resolveToolset('search')).toEqual(['session_search']);
   expect(resolveToolset('core')).toContain('session_search');
 });
+
+test('skills toolset 存在且 core 包含它', () => {
+  expect(Object.keys(TOOLSETS)).toContain('skills');
+  expect(resolveToolset('skills')).toEqual(['skill_view']);
+  expect(resolveToolset('core')).toContain('skill_view');
+});

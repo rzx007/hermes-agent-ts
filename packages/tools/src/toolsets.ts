@@ -21,9 +21,13 @@ export const TOOLSETS: Record<string, Toolset> = {
     description: '会话历史搜索',
     tools: ['session_search'],
   },
+  skills: {
+    description: '技能(程序性知识)',
+    tools: ['skill_view'],
+  },
   core: {
     description: '核心工具集',
-    includes: ['file', 'terminal', 'memory', 'search'],
+    includes: ['file', 'terminal', 'memory', 'search', 'skills'],
   },
 };
 
