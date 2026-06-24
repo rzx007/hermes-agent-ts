@@ -146,6 +146,12 @@ export class SessionDB {
     return rows.map((r) => this.rowToSession(r));
   }
 
+  /**
+   * 全文搜索消息(trigram FTS5)。
+   * @param query 必须是合法的 FTS5 查询串——原始用户输入请先用 @hermes/tools 的
+   *   sanitizeFtsQuery() 转成字面短语,否则可能触发 FTS5 语法错误。
+   * @param limit 返回上限(默认 30)。
+   */
   searchMessages(query: string, limit = 30): SearchHit[] {
     return this.db.prepare(
       `SELECT m.session_id AS sessionId, m.id AS messageId, m.role AS role,
@@ -172,7 +178,10 @@ export class SessionDB {
     ).all(limit) as SessionBrief[];
   }
 
-  /** 仅供测试/内部维护使用:执行任意 SQL。 */
+  /**
+   * 执行任意 SQL —— 仅供测试/内部维护使用。
+   * ⚠️ 不做参数化,严禁传入不可信输入(SQL 注入风险)。生产代码请用专用方法。
+   */
   rawExec(sql: string): void {
     this.db.exec(sql);
   }
