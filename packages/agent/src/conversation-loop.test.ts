@@ -163,3 +163,19 @@ test('注入 deps.memory 后 system 消息含记忆内容', async () => {
   const sys = seen[0]!.find((m) => m.role === 'system');
   expect(sys?.content).toContain('记得喜欢 pnpm');
 });
+
+test('注入 deps.skills 后 system 消息含技能索引', async () => {
+  const seen: import('@hermes/core').Message[][] = [];
+  const provider: Provider = {
+    name: 'mock',
+    async *complete(req) { seen.push(req.messages); yield { contentDelta: 'ok' }; },
+    async aggregate(): Promise<CompletionResult> { return { content: 'ok', toolCalls: [], finishReason: 'stop' }; },
+  };
+  const { db, deps } = makeDeps(provider);
+  const fakeSkills = { renderIndex: () => '可用技能:\n- **demo** — 演示' } as unknown as import('@hermes/core').SkillStore;
+  const filtered = { ...deps, skills: fakeSkills };
+  const s = db.createSession();
+  for await (const _ of runConversation(filtered, s.id, 'hi', { cwd: '/', logger: createLogger('t') })) { /* drain */ }
+  const sys = seen[0]!.find((m) => m.role === 'system');
+  expect(sys?.content).toContain('demo');
+});
