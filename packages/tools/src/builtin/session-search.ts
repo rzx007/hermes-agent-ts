@@ -13,7 +13,7 @@ export const sessionSearchTool = defineTool({
   toolset: 'search',
   schema: z.object({
     query: z.string().optional().describe('搜索词(≥3 字符);省略=浏览最近会话'),
-    limit: z.number().optional().describe('结果数,默认 10'),
+    limit: z.number().int().positive().max(50).optional().describe('结果数,默认 10,上限 50'),
   }),
   handler: async ({ query, limit = 10 }, ctx) => {
     if (!ctx.sessionDb) return '会话搜索不可用。';

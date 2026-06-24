@@ -55,3 +55,14 @@ test('多会话按 sessionId 去重', async () => {
   const occurrences = out.split(code).length - 1;
   expect(occurrences).toBe(1);
 });
+
+test('limit 负数/0/超大 被 schema 拒绝(经 registry 校验)', () => {
+  // 直接验证 schema 拒绝非法 limit(工具经 registry.call 时会被 Zod 校验)
+  const schema = sessionSearchTool.schema;
+  expect(schema.safeParse({ query: 'pnpm', limit: -1 }).success).toBe(false);
+  expect(schema.safeParse({ query: 'pnpm', limit: 0 }).success).toBe(false);
+  expect(schema.safeParse({ query: 'pnpm', limit: 1.5 }).success).toBe(false);
+  expect(schema.safeParse({ query: 'pnpm', limit: 100 }).success).toBe(false);
+  expect(schema.safeParse({ query: 'pnpm', limit: 10 }).success).toBe(true);
+  expect(schema.safeParse({ query: 'pnpm' }).success).toBe(true); // limit 可省略
+});
