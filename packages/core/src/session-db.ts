@@ -179,10 +179,12 @@ export class SessionDB {
   }
 
   /**
-   * 执行任意 SQL —— 仅供测试/内部维护使用。
+   * 执行任意 SQL —— 仅供测试/内部维护使用,**不属于公开 API**。
+   * 标记为 private 以将其移出 @hermes/core 的类型表面;测试通过
+   * session-db.test.ts 内的 rawExec(db, sql) 帮助函数(类型转换)访问。
    * ⚠️ 不做参数化,严禁传入不可信输入(SQL 注入风险)。生产代码请用专用方法。
    */
-  rawExec(sql: string): void {
+  private rawExec(sql: string): void {
     this.db.exec(sql);
   }
 

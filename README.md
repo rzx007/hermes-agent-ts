@@ -2,18 +2,19 @@
 
 用 TypeScript 复刻 [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent)（原项目为 Python）。**架构级对齐 + 惯用 TS 重写**，分阶段推进。
 
-## 当前状态：阶段 3a（记忆系统）✅
+## 当前状态：阶段 3b（会话全文搜索）✅
 
-一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的可用 AI 代理：具备工具集分组、一套本地文件/代码工具（读、写、精确编辑、搜索、列目录、执行命令）、危险命令审批,以及跨会话长期记忆。
+一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的可用 AI 代理：具备工具集分组、一套本地文件/代码工具（读、写、精确编辑、搜索、列目录、执行命令）、危险命令审批、跨会话长期记忆,以及跨会话历史全文搜索。
 
 - 阶段 1（核心代理 MVP）✅ — SessionDB / Provider / ToolRegistry / ConversationLoop / CLI
 - 阶段 2（工具系统）✅ — Toolsets 分组 + `edit_file` / `search_files` / `list_dir`
 - 阶段 2.5（命令审批）✅ — 危险命令审批 + hardline 永禁 + 白名单
 - 阶段 3a（记忆系统）✅ — `MEMORY.md` / `USER.md` + `memory` 工具 + 系统提示注入
+- 阶段 3b（会话全文搜索）✅ — SessionDB trigram FTS5 + `session_search` 工具 + `search` 工具集
 
 - **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
-- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / memory / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` / `memory` + 命令审批（危险命令需确认）+ 记忆工具（memory）
+- **@hermes/tools** — ToolRegistry（Zod schema → JSON Schema，安全调用）+ 工具集（Toolsets）分组（file / terminal / memory / search / core）+ 内置工具 `read_file` / `write_file` / `edit_file` / `search_files` / `list_dir` / `terminal` / `memory` / `session_search` + 命令审批（危险命令需确认）+ 记忆工具（memory）+ 会话全文搜索工具（session_search）
 - **@hermes/agent** — ConversationLoop 核心循环（流式、工具循环、落库、中断、maxIterations 守卫）
 - **@hermes/cli** — readline REPL（`/new` `/tools` `/exit` `/help`，流式渲染，Ctrl+C 中断）
 
@@ -94,7 +95,15 @@ agent 具备跨会话的持久记忆，分两类文件，持久化在 `~/.hermes
 - 每一轮对话开始时，两类记忆会被注入 system prompt，从而实现跨会话记忆。
 - 字数超过上限时需先删除旧条目（remove）再写入新内容。
 
-> 说明：跨会话的全文检索（`session_search`）仍在计划中（阶段 3b）。
+## 会话搜索 (Session Search)
+
+agent 可对历史会话做跨会话全文搜索：
+
+- `session_search` 工具基于 **SessionDB 上的 trigram FTS5**，支持中文子串匹配（查询需 ≥3 字符）。
+- 仅索引 `user` / `assistant` 消息（触发器自动维护，建表时幂等回填历史数据）。
+- 省略 `query` 时退化为浏览最近会话（返回会话预览）。
+- 杜绝 FTS 语法注入：查询经 `sanitizeFtsQuery` 当作字面短语处理。
+- 归入 `search` 工具集（并入 `core`）。
 
 ## 运行
 
@@ -134,7 +143,7 @@ docs/superpowers/
 
 ## 路线图
 
-阶段 1（核心代理）✅ → 阶段 2（工具系统）✅ → 阶段 2.5（命令审批）✅ → 阶段 3a（记忆系统）✅ → 3b（session_search 全文搜索 + 技能系统）→ 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
+阶段 1（核心代理）✅ → 阶段 2（工具系统）✅ → 阶段 2.5（命令审批）✅ → 阶段 3a（记忆系统）✅ → 阶段 3b（session_search 全文搜索）✅ → 技能系统（自进化，下一步）→ 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
 
 设计与计划见 `docs/superpowers/`。
 
@@ -143,5 +152,5 @@ docs/superpowers/
 - 工具均为本地执行；尚无远程终端后端（docker/ssh，后续阶段）
 - 无 web/vision/browser 等外部依赖工具（后续阶段）
 - 无上下文压缩 / 无重试降级（后续阶段）
-- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；但跨会话全文搜索（`session_search`）仍未实现（阶段 3b），技能系统亦未实现（后续阶段）
+- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；跨会话全文搜索已支持（`session_search` 工具，阶段 3b）；技能系统（自进化）仍未实现（后续阶段）
 - 仅支持 GLM provider（Provider 抽象已就绪，加新 provider 只需新增实现）

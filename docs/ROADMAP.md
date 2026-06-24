@@ -24,7 +24,8 @@
 | — | Terminal 后端(docker/ssh) | ⏸️ 计划 |
 | — | Web 工具(web_search/web_extract) | ⏸️ 计划 |
 | 3a | 记忆(MemoryStore + memory 工具 + 系统提示注入) | ✅ 完成 |
-| 3b | session_search(会话全文搜索) + 技能(自进化) | ⏸️ 计划 |
+| 3b | session_search(会话全文搜索) | ✅ 完成 |
+| — | 技能系统(自进化) | ⏸️ 计划 |
 | 4 | 完整 CLI / TUI | ⏸️ 计划 |
 | 5 | MCP / Cron / 委派子代理 | ⏸️ 计划 |
 | 6 | 网关(Telegram/Discord/...) | ⏸️ 计划 |
@@ -129,11 +130,21 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - **系统提示注入**:每轮把两类记忆 `render()` 注入 system prompt,实现跨会话记忆
 - **paths.memoriesDir**:`~/.hermes-ts/memories/`(MEMORY.md / USER.md)
 
-### 阶段 3b:session_search + 技能 ⏸️ 推迟
+### 阶段 3b:session_search ✅
 
-**计划做**:
-- 记忆:FTS5 会话全文搜索(`session_search` 工具,messages 表结构已预留)
-- 技能:技能加载、`skills`/`skill_view`/`skill_manage` 工具、技能内容注入系统提示、后台技能自改进
+**目标**:跨会话历史的全文搜索——agent 能检索过往会话内容。
+
+**已做(MVP)**:
+- **SessionDB trigram FTS5**(`@hermes/core/session-db.ts`):`messages_fts` 虚拟表(trigram tokenizer,支持中文子串/≥3 字符)+ insert/delete **触发器**(只索引 user/assistant 消息)+ 建表时**幂等回填**历史数据(`IF NOT EXISTS`,对现有 DB 安全)
+- **searchMessages / browseSessions**(SessionDB 方法):前者返回带高亮 snippet 的命中;后者(省略 query 时)返回最近会话预览
+- **session_search 工具**(`@hermes/tools/builtin/session-search.ts`):暴露给模型;有 query 走搜索、无 query 走浏览;query<3 字符给提示;无 `ctx.sessionDb` 返回「不可用」;多会话按 sessionId 去重
+- **sanitizeFtsQuery**(`@hermes/tools/fts-query.ts`):把查询当**字面短语**包裹,杜绝 FTS5 语法注入
+- **search toolset**:`TOOLSETS.search = ['session_search']`,并入 `core`
+- **接线**:`ToolContext.sessionDb?: SessionDB`(可选,不注入即「不可用」);CLI 每轮注入 `sessionDb: deps.db`(沿用 memory/approval 模式)
+
+### 技能系统(自进化) ⏸️ 推迟
+
+**计划做**:技能加载、`skills`/`skill_view`/`skill_manage` 工具、技能内容注入系统提示、后台技能自改进。
 
 ---
 
@@ -174,7 +185,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - 工具均本地执行,无远程后端
 - 无 web/vision/browser 等外部依赖工具
 - 无上下文压缩 / 无重试降级
-- 跨会话记忆已支持(memory 工具 + 系统提示注入);但无 session 全文搜索(`session_search`,阶段 3b);无技能系统
+- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);技能系统(自进化)尚未实现
 - 仅 GLM provider(抽象已就绪,加新 provider 只需新增实现)
 
 ## 运维备忘

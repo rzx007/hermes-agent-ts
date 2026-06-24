@@ -7,6 +7,13 @@ import { SessionDB } from './session-db.js';
 let db: SessionDB;
 beforeEach(() => { db = new SessionDB(':memory:'); });
 
+/**
+ * 测试专用:访问 SessionDB 上 private 的 rawExec(已移出公开 API)。
+ * ⚠️ 仅用于在测试中构造数据库状态,严禁用于生产代码。
+ */
+const rawExec = (d: SessionDB, sql: string): void =>
+  (d as unknown as { rawExec(sql: string): void }).rawExec(sql);
+
 test('createSession 返回带默认值的会话', () => {
   const s = db.createSession();
   expect(s.id).toBeTruthy();
@@ -80,7 +87,7 @@ test('删除消息后不再命中(delete 触发器)', () => {
   const s = db.createSession();
   db.appendMessage(s.id, { role: 'user', content: 'DELETME 待删内容' });
   expect(db.searchMessages('"DELETME"', 10).length).toBeGreaterThan(0);
-  db.rawExec(`DELETE FROM messages WHERE session_id = '${s.id}'`);
+  rawExec(db, `DELETE FROM messages WHERE session_id = '${s.id}'`);
   expect(db.searchMessages('"DELETME"', 10)).toEqual([]);
 });
 
@@ -104,7 +111,7 @@ test('回填:清空 fts 后重开仍可搜', () => {
   const d1 = new SessionDB(path);
   const s = d1.createSession();
   d1.appendMessage(s.id, { role: 'user', content: 'BACKFILLWORD 回填测试内容' });
-  d1.rawExec('DELETE FROM messages_fts');
+  rawExec(d1, 'DELETE FROM messages_fts');
   expect(d1.searchMessages('"BACKFILLWORD"', 10)).toEqual([]);
   d1.close();
   const d2 = new SessionDB(path);
