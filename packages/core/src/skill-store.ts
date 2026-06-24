@@ -96,7 +96,8 @@ export class SkillStore {
     const name = fmName ?? basename(skillDir);
     const description = fmDesc ?? '';
     const relParent = relative(root, dirname(skillDir));
-    const category = relParent === '' ? 'general' : relParent.split(sep).join('/');
+    const category =
+      relParent === '' || relParent === '..' ? 'general' : relParent.split(sep).join('/');
     return { name, description, category, content: body };
   }
 }

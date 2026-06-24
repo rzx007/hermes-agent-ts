@@ -108,3 +108,11 @@ test('目录不存在不崩', () => {
   expect(() => new SkillStore(join(dir, 'nonexistent'))).not.toThrow();
   expect(new SkillStore(join(dir, 'nonexistent')).list()).toEqual([]);
 });
+
+test('SKILL.md 直接位于 skills 根目录 → category general(不是 ..)', () => {
+  // 不经 writeSkill(它会建子目录),直接在 dir 根写 SKILL.md
+  writeFileSync(join(dir, 'SKILL.md'), '---\nname: rootskill\ndescription: 根技能\n---\n正文', 'utf8');
+  const s = new SkillStore(dir);
+  const meta = s.list().find((m) => m.name === 'rootskill')!;
+  expect(meta.category).toBe('general');
+});
