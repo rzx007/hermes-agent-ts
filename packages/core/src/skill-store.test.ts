@@ -145,8 +145,8 @@ test('create 重名报错', () => {
 
 test('create 非法名报错', () => {
   const store = new SkillStore(dir);
-  expect(() => store.create('Bad Name', SKILL('Bad Name'))).toThrow();
-  expect(() => store.create('..', SKILL('..'))).toThrow();
+  expect(() => store.create('Bad Name', SKILL('Bad Name'))).toThrow(/非法技能名/);
+  expect(() => store.create('..', SKILL('..'))).toThrow(/非法技能名/);
 });
 
 test('create frontmatter.name 与参数 name 不一致报错', () => {
@@ -156,7 +156,7 @@ test('create frontmatter.name 与参数 name 不一致报错', () => {
 
 test('create 非法 category 报错', () => {
   const store = new SkillStore(dir);
-  expect(() => store.create('x', SKILL('x'), 'bad/seg')).toThrow();
+  expect(() => store.create('x', SKILL('x'), 'bad/seg')).toThrow(/非法分类/);
 });
 
 test('create 正文为空报错', () => {

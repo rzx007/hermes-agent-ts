@@ -120,12 +120,21 @@ export class SkillStore {
     const skillDir = category !== undefined ? join(this.dir, category, name) : join(this.dir, name);
     const file = join(skillDir, 'SKILL.md');
     this.assertWithinRoot(file);
+    const dirExisted = existsSync(skillDir);
     mkdirSync(skillDir, { recursive: true });
-    atomicWrite(file, content);
-    const entry = this.parseSkill(this.dir, file);
-    this.skills.push(entry);
-    this.byName.set(entry.name, entry);
-    return { path: file };
+    try {
+      atomicWrite(file, content);
+      const entry = this.parseSkill(this.dir, file);
+      this.skills.push(entry);
+      this.byName.set(entry.name, entry);
+      return { path: file };
+    } catch (e) {
+      // 写盘/解析中途失败:回滚刚建的目录,避免磁盘残留与内存不一致(仅清自己新建的,勿动共享 category 目录)
+      if (!dirExisted) {
+        try { rmSync(skillDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      }
+      throw e;
+    }
   }
 
   private assertWithinRoot(p: string): void {
