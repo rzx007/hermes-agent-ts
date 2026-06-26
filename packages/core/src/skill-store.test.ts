@@ -168,3 +168,69 @@ test('create 缺 frontmatter 报错', () => {
   const store = new SkillStore(dir);
   expect(() => store.create('x', '没有 frontmatter')).toThrow(/frontmatter/);
 });
+
+test('edit 整体重写并就地更新（skills 与 byName 同步、无 desync）', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a', '旧描述', '旧正文'));
+  store.edit('a', SKILL('a', '新描述', '新正文'));
+  expect(store.getContent('a')).toContain('新正文');
+  expect(store.getContent('a')).not.toContain('旧正文');
+  expect(store.list().find((s) => s.name === 'a')?.description).toBe('新描述');
+});
+
+test('edit 不存在的技能报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.edit('nope', SKILL('nope'))).toThrow(/不存在/);
+});
+
+test('edit 改 frontmatter name 被拒', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(() => store.edit('a', SKILL('b'))).toThrow(/name/);
+});
+
+test('patch 精确替换（唯一）', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a', 'd', '步骤一：foo'));
+  store.patch('a', '步骤一：foo', '步骤一：bar');
+  expect(store.getContent('a')).toContain('步骤一：bar');
+});
+
+test('patch 未找到报错', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(() => store.patch('a', '不存在的文本', 'x')).toThrow(/未找到/);
+});
+
+test('patch 不唯一报错（除非 replace_all）', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a', 'd', 'dup dup dup'));
+  expect(() => store.patch('a', 'dup', 'x')).toThrow(/不唯一/);
+  store.patch('a', 'dup', 'x', true);
+  expect(store.getContent('a')).toContain('x x x');
+});
+
+test('patch 含 $ 的替换不被损坏', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a', 'd', 'PRICE_HERE'));
+  store.patch('a', 'PRICE_HERE', '$1.00 与 $name');
+  expect(store.getContent('a')).toContain('$1.00 与 $name');
+});
+
+test('patch 改坏 frontmatter 被拒', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(() => store.patch('a', 'description: d\n', '')).toThrow(/description/);
+});
+
+test('patch 改 frontmatter name 被拒', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(() => store.patch('a', 'name: a', 'name: b')).toThrow(/name/);
+});
+
+test('patch 空 old_string 报错', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(() => store.patch('a', '', 'x')).toThrow();
+});

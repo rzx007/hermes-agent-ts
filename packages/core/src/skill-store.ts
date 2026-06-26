@@ -137,6 +137,38 @@ export class SkillStore {
     }
   }
 
+  edit(name: string, content: string): { path: string } {
+    const existing = this.byName.get(name);
+    if (!existing) throw new Error(`技能 "${name}" 不存在`);
+    const meta = validateAndParseContent(content);
+    if (meta.name !== name) {
+      throw new Error(`不允许修改 frontmatter 的 name(现为 "${name}",新内容为 "${meta.name}");改名请删除后重建`);
+    }
+    atomicWrite(existing.file, content);
+    existing.content = meta.body;
+    existing.description = meta.description;
+    return { path: existing.file };
+  }
+
+  patch(name: string, oldString: string, newString: string, replaceAll = false): { path: string } {
+    if (oldString.length === 0) throw new Error('patch 的 old_string 不能为空');
+    const existing = this.byName.get(name);
+    if (!existing) throw new Error(`技能 "${name}" 不存在`);
+    const raw = readFileSync(existing.file, 'utf8');
+    const occurrences = raw.split(oldString).length - 1;
+    if (occurrences === 0) throw new Error('patch 未找到待替换文本(old_string)');
+    if (!replaceAll && occurrences > 1) {
+      throw new Error(`patch 待替换文本出现 ${occurrences} 次,不唯一;请用 replace_all 或扩大上下文`);
+    }
+    const next = raw.split(oldString).join(newString);
+    const meta = validateAndParseContent(next);
+    if (meta.name !== name) throw new Error('patch 不可修改 frontmatter 的 name');
+    atomicWrite(existing.file, next);
+    existing.content = meta.body;
+    existing.description = meta.description;
+    return { path: existing.file };
+  }
+
   private assertWithinRoot(p: string): void {
     const root = resolve(this.dir);
     const resolved = resolve(p);
