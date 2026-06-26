@@ -159,3 +159,11 @@ test('confirm: always 落盘持久化', async () => {
   expect((await g.confirm({ command: 'skill:delete:x', description: 'd' })).allowed).toBe(true);
   expect(readFileSync(path, 'utf8')).toContain('skill:delete:x');
 });
+
+test('confirm: prompt 抛错则按 deny 处理', async () => {
+  const g = new ApprovalGuard({
+    mode: 'manual', allowlistPath: tmpAllowlist(),
+    prompt: async () => { throw new Error('boom'); },
+  });
+  expect((await g.confirm({ command: 'skill:delete:x', description: 'd' })).allowed).toBe(false);
+});
