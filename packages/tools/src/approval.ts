@@ -96,6 +96,34 @@ export class ApprovalGuard {
     return { allowed: true };
   }
 
+  /**
+   * 通用确认(不经 detectDangerous):用于非 shell 命令的不可逆操作(如删除技能)。
+   * 复用同一 prompt 回调与 allowlist;语义与 check 的危险分支一致。
+   */
+  async confirm(req: ApprovalRequest): Promise<{ allowed: boolean; reason?: string }> {
+    if (this.mode === 'off') return { allowed: true };
+    if (this.sessionAllow.has(req.command) || this.persistentAllow.has(req.command)) {
+      return { allowed: true };
+    }
+    if (!this.prompt) {
+      return { allowed: false, reason: `已阻止:${req.description} 需要确认,但当前无交互审批通道。` };
+    }
+    let decision: ApprovalDecision;
+    try {
+      decision = await this.prompt(req);
+    } catch {
+      decision = 'deny';
+    }
+    if (decision === 'deny') return { allowed: false, reason: '用户拒绝了该操作。' };
+    if (decision === 'session') this.sessionAllow.add(req.command);
+    if (decision === 'always') {
+      this.sessionAllow.add(req.command);
+      this.persistentAllow.add(req.command);
+      this.save();
+    }
+    return { allowed: true };
+  }
+
   private load(): Set<string> {
     try {
       const raw = readFileSync(this.allowlistPath, 'utf8');

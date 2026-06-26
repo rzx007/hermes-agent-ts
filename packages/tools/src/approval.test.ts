@@ -122,3 +122,40 @@ test('非根删除仍为 dangerous(不被根 hardline 误伤)', () => {
   expect(detectDangerous('rm -rf /tmp/x').level).toBe('dangerous');
   expect(detectDangerous('rm -rf ./build').level).toBe('dangerous');
 });
+
+test('confirm: off 模式直接放行', async () => {
+  const g = new ApprovalGuard({ mode: 'off', allowlistPath: tmpAllowlist() });
+  const r = await g.confirm({ command: 'skill:delete:x', description: '删除技能 x' });
+  expect(r.allowed).toBe(true);
+});
+
+test('confirm: 无 prompt 通道则阻止', async () => {
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: tmpAllowlist() });
+  const r = await g.confirm({ command: 'skill:delete:x', description: '删除技能 x' });
+  expect(r.allowed).toBe(false);
+  expect(r.reason).toBeTruthy();
+});
+
+test('confirm: deny 阻止', async () => {
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: tmpAllowlist(), prompt: async () => 'deny' });
+  const r = await g.confirm({ command: 'skill:delete:x', description: '删除技能 x' });
+  expect(r.allowed).toBe(false);
+});
+
+test('confirm: session 记忆后同命令免确认', async () => {
+  let calls = 0;
+  const g = new ApprovalGuard({
+    mode: 'manual', allowlistPath: tmpAllowlist(),
+    prompt: async () => { calls++; return 'session'; },
+  });
+  expect((await g.confirm({ command: 'skill:delete:x', description: 'd' })).allowed).toBe(true);
+  expect((await g.confirm({ command: 'skill:delete:x', description: 'd' })).allowed).toBe(true);
+  expect(calls).toBe(1);
+});
+
+test('confirm: always 落盘持久化', async () => {
+  const path = tmpAllowlist();
+  const g = new ApprovalGuard({ mode: 'manual', allowlistPath: path, prompt: async () => 'always' });
+  expect((await g.confirm({ command: 'skill:delete:x', description: 'd' })).allowed).toBe(true);
+  expect(readFileSync(path, 'utf8')).toContain('skill:delete:x');
+});
