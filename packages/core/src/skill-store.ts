@@ -178,6 +178,8 @@ export class SkillStore {
     const resolved = resolve(skillDir);
     if (resolved === root) throw new Error('拒绝删除技能根目录');
     if (!resolved.startsWith(root + sep)) throw new Error('拒绝删除技能根目录之外的路径');
+    // 只查叶子目录即可:扫描跳过 symlink 目录(isDirectory()=false 不递归),create 又只用校验过的单段名建目录,
+    // 故任何已入索引的技能其祖先组件都不可能是 symlink,无需逐级检查。
     if (lstatSync(skillDir).isSymbolicLink()) throw new Error('拒绝删除 symlink/junction 链接目录');
     rmSync(skillDir, { recursive: true, force: true });
     const idx = this.skills.indexOf(existing);
