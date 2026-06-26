@@ -61,6 +61,11 @@ export const skillManageTool = defineTool({
         ctx.skills.delete(name);
         return `已删除技能 "${name}"。`;
       }
+      default: {
+        // 穷尽性保护:新增 action 而漏写 case 时,这里会编译报错(定位到枚举改动处)
+        const _exhaustive: never = action;
+        throw new Error(`未知 action: ${String(_exhaustive)}`);
+      }
     }
   },
 });
