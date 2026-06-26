@@ -7,12 +7,12 @@ import { searchFilesTool } from './search-files.js';
 import { listDirTool } from './list-dir.js';
 import { memoryTool } from './memory.js';
 import { sessionSearchTool } from './session-search.js';
-import { skillViewTool } from './skills.js';
+import { skillViewTool, skillManageTool } from './skills.js';
 
 export const builtinTools = [
   readFileTool, writeFileTool, terminalTool,
   editFileTool, searchFilesTool, listDirTool,
-  memoryTool, sessionSearchTool, skillViewTool,
+  memoryTool, sessionSearchTool, skillViewTool, skillManageTool,
 ];
 
 export function registerBuiltins(registry: ToolRegistry): void {
@@ -25,4 +25,5 @@ export function registerBuiltins(registry: ToolRegistry): void {
   registry.register(memoryTool);
   registry.register(sessionSearchTool);
   registry.register(skillViewTool);
+  registry.register(skillManageTool);
 }
