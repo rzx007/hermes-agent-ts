@@ -145,6 +145,7 @@ export class SkillStore {
       throw new Error(`不允许修改 frontmatter 的 name(现为 "${name}",新内容为 "${meta.name}");改名请删除后重建`);
     }
     atomicWrite(existing.file, content);
+    // name 不可变 → 文件不移动 → category 不变,只需就地同步 content/description(skills[] 与 byName 共享同一对象)
     existing.content = meta.body;
     existing.description = meta.description;
     return { path: existing.file };
@@ -162,7 +163,7 @@ export class SkillStore {
     }
     const next = raw.split(oldString).join(newString);
     const meta = validateAndParseContent(next);
-    if (meta.name !== name) throw new Error('patch 不可修改 frontmatter 的 name');
+    if (meta.name !== name) throw new Error('patch 不可修改 frontmatter 的 name;改名请删除后重建');
     atomicWrite(existing.file, next);
     existing.content = meta.body;
     existing.description = meta.description;
