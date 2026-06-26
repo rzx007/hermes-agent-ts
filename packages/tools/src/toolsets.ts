@@ -23,7 +23,7 @@ export const TOOLSETS: Record<string, Toolset> = {
   },
   skills: {
     description: '技能(程序性知识)',
-    tools: ['skill_view'],
+    tools: ['skill_view', 'skill_manage'],
   },
   core: {
     description: '核心工具集',

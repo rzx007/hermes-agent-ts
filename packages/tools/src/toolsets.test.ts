@@ -86,8 +86,16 @@ test('search toolset 存在且 core 包含它', () => {
   expect(resolveToolset('core')).toContain('session_search');
 });
 
-test('skills toolset 存在且 core 包含它', () => {
+test('skills toolset 存在且 core 包含它(skill_view + skill_manage)', () => {
   expect(Object.keys(TOOLSETS)).toContain('skills');
-  expect(resolveToolset('skills')).toEqual(['skill_view']);
+  expect(resolveToolset('skills').sort()).toEqual(['skill_manage', 'skill_view']);
   expect(resolveToolset('core')).toContain('skill_view');
+  expect(resolveToolset('core')).toContain('skill_manage');
+});
+
+test('computeEnabledTools enabled:[core] 含 skill_manage(显式作用域不丢写工具)', () => {
+  const registered = ['skill_view', 'skill_manage', 'read_file'];
+  const out = computeEnabledTools({ enabled: ['core'] }, registered).sort();
+  expect(out).toContain('skill_manage');
+  expect(out).toContain('skill_view');
 });

@@ -21,11 +21,9 @@ export class SkillStore {
   private readonly skills: SkillEntry[] = [];
   private readonly byName = new Map<string, SkillEntry>();
   private readonly dir: string;
-  private readonly logger?: Logger;
 
   constructor(dir: string, logger?: Logger) {
     this.dir = dir;
-    this.logger = logger;
     if (!existsSync(dir)) return;
     const files = this.findSkillFiles(dir).sort();
     for (const file of files) {
