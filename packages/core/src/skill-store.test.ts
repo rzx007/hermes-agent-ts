@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SkillStore } from './skill-store.js';
@@ -13,6 +13,9 @@ function writeSkill(rel: string, frontmatter: string, body: string): void {
   mkdirSync(full, { recursive: true });
   writeFileSync(join(full, 'SKILL.md'), `---\n${frontmatter}\n---\n${body}`, 'utf8');
 }
+
+const SKILL = (name: string, desc = 'd', body = '正文内容') =>
+  `---\nname: ${name}\ndescription: ${desc}\n---\n\n${body}`;
 
 test('扫描加载 + frontmatter name/description', () => {
   writeSkill('demo', 'name: demo\ndescription: 演示技能', '# Demo\n步骤一二三');
@@ -115,4 +118,53 @@ test('SKILL.md 直接位于 skills 根目录 → category general(不是 ..)', (
   const s = new SkillStore(dir);
   const meta = s.list().find((m) => m.name === 'rootskill')!;
   expect(meta.category).toBe('general');
+});
+
+test('create 新建技能并即时热更新（list/getContent/renderIndex 立即可见）', () => {
+  const store = new SkillStore(dir);
+  const { path } = store.create('git-commit', SKILL('git-commit', '规范提交'));
+  expect(existsSync(path)).toBe(true);
+  expect(readFileSync(path, 'utf8')).toContain('name: git-commit');
+  expect(store.getContent('git-commit')).toContain('正文内容');
+  expect(store.list().map((s) => s.name)).toContain('git-commit');
+  expect(store.renderIndex()).toContain('git-commit');
+});
+
+test('create 带 category 落在子目录，category 与入参一致', () => {
+  const store = new SkillStore(dir);
+  store.create('code-review', SKILL('code-review'), 'coding');
+  expect(existsSync(join(dir, 'coding', 'code-review', 'SKILL.md'))).toBe(true);
+  expect(store.list().find((s) => s.name === 'code-review')?.category).toBe('coding');
+});
+
+test('create 重名报错', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(() => store.create('a', SKILL('a'))).toThrow(/已存在/);
+});
+
+test('create 非法名报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.create('Bad Name', SKILL('Bad Name'))).toThrow();
+  expect(() => store.create('..', SKILL('..'))).toThrow();
+});
+
+test('create frontmatter.name 与参数 name 不一致报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.create('foo', SKILL('bar'))).toThrow(/不一致/);
+});
+
+test('create 非法 category 报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.create('x', SKILL('x'), 'bad/seg')).toThrow();
+});
+
+test('create 正文为空报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.create('x', `---\nname: x\ndescription: d\n---\n\n   `)).toThrow(/正文/);
+});
+
+test('create 缺 frontmatter 报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.create('x', '没有 frontmatter')).toThrow(/frontmatter/);
 });

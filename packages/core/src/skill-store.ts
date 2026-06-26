@@ -1,5 +1,8 @@
-import { readFileSync, readdirSync, existsSync, type Dirent } from 'node:fs';
-import { join, relative, dirname, basename, sep } from 'node:path';
+import {
+  readFileSync, readdirSync, existsSync, writeFileSync,
+  renameSync, mkdirSync, rmSync, lstatSync, type Dirent,
+} from 'node:fs';
+import { join, relative, dirname, basename, sep, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { Logger } from './logging.js';
 
@@ -11,13 +14,18 @@ export interface SkillMeta {
 
 interface SkillEntry extends SkillMeta {
   content: string;
+  file: string;
 }
 
 export class SkillStore {
   private readonly skills: SkillEntry[] = [];
   private readonly byName = new Map<string, SkillEntry>();
+  private readonly dir: string;
+  private readonly logger?: Logger;
 
   constructor(dir: string, logger?: Logger) {
+    this.dir = dir;
+    this.logger = logger;
     if (!existsSync(dir)) return;
     const files = this.findSkillFiles(dir).sort();
     for (const file of files) {
@@ -98,7 +106,34 @@ export class SkillStore {
     const relParent = relative(root, dirname(skillDir));
     const category =
       relParent === '' || relParent === '..' ? 'general' : relParent.split(sep).join('/');
-    return { name, description, category, content: body };
+    return { name, description, category, content: body, file };
+  }
+
+  create(name: string, content: string, category?: string): { path: string } {
+    validateSkillName(name);
+    if (category !== undefined) validateCategory(category);
+    const meta = validateAndParseContent(content);
+    if (meta.name !== name) {
+      throw new Error(`frontmatter 的 name "${meta.name}" 与参数 name "${name}" 不一致`);
+    }
+    if (this.byName.has(name)) throw new Error(`技能 "${name}" 已存在`);
+    const skillDir = category !== undefined ? join(this.dir, category, name) : join(this.dir, name);
+    const file = join(skillDir, 'SKILL.md');
+    this.assertWithinRoot(file);
+    mkdirSync(skillDir, { recursive: true });
+    atomicWrite(file, content);
+    const entry = this.parseSkill(this.dir, file);
+    this.skills.push(entry);
+    this.byName.set(entry.name, entry);
+    return { path: file };
+  }
+
+  private assertWithinRoot(p: string): void {
+    const root = resolve(this.dir);
+    const resolved = resolve(p);
+    if (resolved !== root && !resolved.startsWith(root + sep)) {
+      throw new Error(`路径越界:${p} 不在技能根 ${this.dir} 内`);
+    }
   }
 }
 
@@ -114,4 +149,53 @@ function splitFrontmatter(raw: string): { frontmatter: string | null; body: stri
     }
   }
   return { frontmatter: null, body: raw };
+}
+
+const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/;
+const MAX_NAME = 64;
+const MAX_DESC = 1024;
+const MAX_CONTENT = 100000;
+
+export function validateSkillName(name: string): void {
+  if (name.length === 0 || name.length > MAX_NAME || !NAME_RE.test(name)) {
+    throw new Error(`非法技能名 "${name}":须匹配 ^[a-z0-9][a-z0-9._-]*$ 且长度 1–${MAX_NAME}`);
+  }
+}
+
+export function validateCategory(category: string): void {
+  if (category.length === 0 || category.length > MAX_NAME || !NAME_RE.test(category)) {
+    throw new Error(`非法分类 "${category}":须为单段且匹配 ^[a-z0-9][a-z0-9._-]*$`);
+  }
+}
+
+/** 校验完整 SKILL.md 文本并取出 name/description/body；失败抛错 */
+export function validateAndParseContent(content: string): { name: string; description: string; body: string } {
+  if (content.length > MAX_CONTENT) {
+    throw new Error(`SKILL.md 过大(${content.length} > ${MAX_CONTENT} 字符)`);
+  }
+  const { frontmatter, body } = splitFrontmatter(content);
+  if (frontmatter === null) throw new Error('SKILL.md 必须以 YAML frontmatter(--- 包裹)开头');
+  const parsed: unknown = parseYaml(frontmatter);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('frontmatter 必须是 YAML 映射');
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.name !== 'string' || obj.name.length === 0) throw new Error('frontmatter 缺少 name');
+  if (typeof obj.description !== 'string' || obj.description.length === 0) {
+    throw new Error('frontmatter 缺少 description');
+  }
+  if (obj.description.length > MAX_DESC) throw new Error(`description 过长(> ${MAX_DESC} 字符)`);
+  if (body.trim().length === 0) throw new Error('SKILL.md 正文(frontmatter 之后)不能为空');
+  return { name: obj.name, description: obj.description, body };
+}
+
+function atomicWrite(file: string, content: string): void {
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, content, 'utf8');
+  try {
+    renameSync(tmp, file);
+  } catch (e) {
+    try { rmSync(tmp, { force: true }); } catch { /* ignore */ }
+    throw e;
+  }
 }
