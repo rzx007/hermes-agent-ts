@@ -170,6 +170,21 @@ export class SkillStore {
     return { path: existing.file };
   }
 
+  delete(name: string): void {
+    const existing = this.byName.get(name);
+    if (!existing) throw new Error(`技能 "${name}" 不存在`);
+    const skillDir = dirname(existing.file);
+    const root = resolve(this.dir);
+    const resolved = resolve(skillDir);
+    if (resolved === root) throw new Error('拒绝删除技能根目录');
+    if (!resolved.startsWith(root + sep)) throw new Error('拒绝删除技能根目录之外的路径');
+    if (lstatSync(skillDir).isSymbolicLink()) throw new Error('拒绝删除 symlink/junction 链接目录');
+    rmSync(skillDir, { recursive: true, force: true });
+    const idx = this.skills.indexOf(existing);
+    if (idx >= 0) this.skills.splice(idx, 1);
+    this.byName.delete(name);
+  }
+
   private assertWithinRoot(p: string): void {
     const root = resolve(this.dir);
     const resolved = resolve(p);

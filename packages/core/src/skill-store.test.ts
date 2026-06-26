@@ -234,3 +234,38 @@ test('patch 空 old_string 报错', () => {
   store.create('a', SKILL('a'));
   expect(() => store.patch('a', '', 'x')).toThrow();
 });
+
+test('delete 删除技能并移出索引', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  expect(existsSync(join(dir, 'a', 'SKILL.md'))).toBe(true);
+  store.delete('a');
+  expect(existsSync(join(dir, 'a'))).toBe(false);
+  expect(store.getContent('a')).toBeNull();
+  expect(store.list().map((s) => s.name)).not.toContain('a');
+});
+
+test('delete 不存在的技能报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.delete('nope')).toThrow(/不存在/);
+});
+
+test('delete 软链接技能目录被拒（不删 symlink/junction）', async () => {
+  // 扫盘会跳过 symlink 目录(isDirectory()=false)，所以不能靠扫描发现 symlink 技能。
+  // 正确做法：先正常 create 真实技能（store 内存已有条目），再把它的磁盘目录替换成 junction。
+  const { symlinkSync } = await import('node:fs');
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a')); // byName 有 'a'，file=dir/a/SKILL.md
+  const target = mkdtempSync(join(tmpdir(), 'hermes-skill-tgt-'));
+  rmSync(join(dir, 'a'), { recursive: true, force: true });
+  let linked = true;
+  try {
+    symlinkSync(target, join(dir, 'a'), 'junction'); // Windows junction 无需管理员
+  } catch {
+    linked = false; // 平台不支持则跳过断言（仍通过）
+  }
+  if (linked) {
+    expect(() => store.delete('a')).toThrow(/symlink|链接/i);
+  }
+  rmSync(target, { recursive: true, force: true });
+});
