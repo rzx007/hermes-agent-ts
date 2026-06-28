@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import { runConversation, runSkillReview, shouldTriggerReview, type LoopDeps } from '@hermes/agent';
 import { ApprovalGuard, type ToolContext } from '@hermes/tools';
-import { allowlistPath } from '@hermes/core';
+import { allowlistPath, runCurator } from '@hermes/core';
 
-export interface ReplOptions { approvalMode: 'manual' | 'off'; skillNudgeInterval: number }
+export interface ReplOptions { approvalMode: 'manual' | 'off'; skillNudgeInterval: number; skillArchiveDays: number }
 
 export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, options: ReplOptions) {
   const { db } = deps;
@@ -52,11 +52,18 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
     const line = (await rl.question(pc.cyan('\n› '))).trim();
     if (!line) continue;
     if (line === '/exit') { if (inFlightReview) await inFlightReview; break; }
-    if (line === '/help') { console.log('/new 新会话  /tools 查看启用工具  /exit 退出  /help 帮助'); continue; }
+    if (line === '/help') { console.log('/new 新会话  /tools 查看启用工具  /curate 整理技能  /exit 退出  /help 帮助'); continue; }
     if (line === '/tools') {
       const names = deps.toolNames ?? deps.registry.getToolNames();
       console.log(pc.dim(`启用的工具(${names.length}):`));
       console.log(names.join(', '));
+      continue;
+    }
+    if (line === '/curate') {
+      if (!deps.skills) { console.log(pc.dim('技能未启用')); continue; }
+      if (options.skillArchiveDays <= 0) { console.log(pc.dim('归档已关闭(HERMES_SKILL_ARCHIVE_DAYS=0)')); continue; }
+      const rep = runCurator(deps.skills, { archiveAfterDays: options.skillArchiveDays, now: new Date(), logger: ctx.logger });
+      console.log(rep.archived.length ? pc.dim(`🗃 已归档:${rep.archived.join(', ')}`) : pc.dim('无可归档技能'));
       continue;
     }
     if (line === '/new') {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import 'dotenv/config';
-import { loadConfig, ensureHermesHome, sessionDbPath, SessionDB, createLogger, MemoryStore, memoriesDir, SkillStore, skillsDir } from '@hermes/core';
+import { loadConfig, ensureHermesHome, sessionDbPath, SessionDB, createLogger, MemoryStore, memoriesDir, SkillStore, skillsDir, runCurator } from '@hermes/core';
 import { createProvider } from '@hermes/providers';
 import { ToolRegistry, registerBuiltins, computeEnabledTools, TOOLSETS } from '@hermes/tools';
 import { repl } from './repl.js';
@@ -15,6 +15,10 @@ async function main() {
   const memory = new MemoryStore(memoriesDir());
   const logger = createLogger('cli');
   const skills = new SkillStore(skillsDir(), logger);
+  const curated = runCurator(skills, { archiveAfterDays: config.skillArchiveDays, now: new Date(), logger });
+  if (curated.archived.length) {
+    console.log(`🗃 已归档 ${curated.archived.length} 个久未用技能:${curated.archived.join(', ')}`);
+  }
   const db = new SessionDB(sessionDbPath());
   process.on('exit', () => { try { db.close(); } catch { /* already closed */ } });
   const provider = createProvider(config);
@@ -35,7 +39,7 @@ async function main() {
 
   const deps = { db, provider, registry, model: config.model, maxIterations: config.maxIterations, toolNames, memory, skills };
   try {
-    await repl(deps, { cwd: process.cwd(), logger }, { approvalMode: config.approvalMode ?? 'manual', skillNudgeInterval: config.skillNudgeInterval });
+    await repl(deps, { cwd: process.cwd(), logger }, { approvalMode: config.approvalMode ?? 'manual', skillNudgeInterval: config.skillNudgeInterval, skillArchiveDays: config.skillArchiveDays });
   } finally {
     db.close();
   }
