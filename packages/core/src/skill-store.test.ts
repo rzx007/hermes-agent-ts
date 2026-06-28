@@ -300,6 +300,15 @@ test('patch 记一次 patch', () => {
   expect(store.usageEntries().find(([n]) => n === 'a')?.[1].patchCount).toBe(1);
 });
 
+test('edit 记一次 patch(不动 agentCreated)', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'), undefined, { agentCreated: true });
+  store.edit('a', SKILL('a', '新描述', '新正文'));
+  const e = store.usageEntries().find(([n]) => n === 'a')?.[1];
+  expect(e?.patchCount).toBe(1);
+  expect(e?.agentCreated).toBe(true); // edit 不改来源
+});
+
 test('delete 同时移除 usage 条目', () => {
   const store = new SkillStore(dir);
   store.create('a', SKILL('a'));
