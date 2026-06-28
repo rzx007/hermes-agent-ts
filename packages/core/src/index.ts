@@ -5,3 +5,4 @@ export * from './logging.js';
 export * from './session-db.js';
 export * from './memory-store.js';
 export * from './skill-store.js';
+export * from './skill-usage.js';
