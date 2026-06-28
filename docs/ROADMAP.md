@@ -28,7 +28,8 @@
 | 技能 a | 只读技能:SkillStore + skill_view + 索引注入 | ✅ 完成 |
 | 技能 b-1 | skill_manage CRUD(create/edit/patch/delete)+ 热更新 + delete 审批 | ✅ 完成 |
 | 技能 c-1 | 自改进 review(后台异步,达阈值复盘→skill_manage) | ✅ 完成 |
-| 技能 c-余 | curator 生命周期 + provenance + 技能支持文件 | ⏸️ 计划 |
+| 技能 c-2 | provenance(.usage.json)+ curator 归档(启动/手动) | ✅ 完成 |
+| 技能 c-3 | curator 合并(LLM)+ 技能支持文件 + 记忆自改进 | ⏸️ 计划 |
 | 4 | 完整 CLI / TUI | ⏸️ 计划 |
 | 5 | MCP / Cron / 委派子代理 | ⏸️ 计划 |
 | 6 | 网关(Telegram/Discord/...) | ⏸️ 计划 |
@@ -180,9 +181,21 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - **热更新**:与主流程**同一 SkillStore 实例**,自改进成果下一轮系统提示索引即可见。
 - **接线零侵入主循环**:runner 独立于 `ConversationLoop`,只在 repl 收尾处接。
 
-### 技能 c-余:curator + provenance + 支持文件 ⏸️ 推迟
+### 技能 c-2:provenance + curator 归档 ✅
 
-**计划做**:provenance(`.usage.json` 标 `agent_created`,区分用户建/agent 建)、curator 生命周期管家(按 active/stale/archived 自动归档/合并 agent 建的技能)、技能支持文件(`write_file`/`remove_file` 写 references/templates/scripts/assets)、记忆自改进(本次只自改进技能)。
+**目标**:技能库记住每条技能的来源与使用情况,并在 CLI 启动时(及 `/curate`)自动把「agent 自建且久未使用」的技能归档;用户手建技能永不自动归档。
+
+**已做(MVP)**:
+- **SkillUsage**(`@hermes/core/skill-usage.ts`):`.usage.json` sidecar,`create`(身份事件,整条覆盖,重置 agentCreated/state/counts/时间戳)/ `record`(变更,就地改,永不动 agentCreated,缺条目以 agentCreated=false 新建)/ `remove`/`get`/`entries`;原子写,加载容错(缺/坏 → 空)。**缺条目 = 用户建**,永不自动管理。
+- **SkillStore 集成**:create 记 provenance(透传 agentCreated,用 `usage.create` 整条覆盖→同名重建重置)、edit/patch 记 patch、delete remove、新增 `recordView`/`usageEntries`;`archive(name)`(三重路径安全,移到 `.archive/<叶名>`,冲突加后缀绝不覆盖,usage state=archived,移出索引);扫描跳过 `.archive`。
+- **runCurator**(`@hermes/core/skill-curator.ts`):只归档 `agentCreated && state==='active' && 闲置>阈值`;`now` 可注入;坏时间戳→NaN→不归档;`archiveAfterDays<=0` 关闭;best-effort(单条失败 warn 跳过)。
+- **provenance 接线**:`ToolContext.backgroundReview`;`skill_view`→`recordView`;`skill_manage` create→`agentCreated: ctx.backgroundReview ?? false`;`runSkillReview` 在 `registry.call` 处注入 `backgroundReview:true`(唯一真相源,前台→用户建,后台→agent 建)。
+- **config**:`skillArchiveDays`(`HERMES_SKILL_ARCHIVE_DAYS`,默认 30,`0`=关;`parseIntConfig` 泛化带默认参)。
+- **CLI**:启动时跑 curator(best-effort try/catch,归档非空打印 🗃 摘要)+ `/curate` 命令(关闭/无可归档/已归档 三态提示)。
+
+### 技能 c-3:curator 合并 + 支持文件 + 记忆自改进 ⏸️ 推迟
+
+**计划做**:curator 合并/consolidation(用 LLM 把相似/冗余技能合到 umbrella)、技能支持文件(`write_file`/`remove_file` 写 references/templates/scripts/assets)、记忆自改进(review 扩展到 memory)、归档恢复命令、stale 预警态。
 
 ---
 
@@ -228,7 +241,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - 工具均本地执行,无远程后端
 - 无 web/vision/browser 等外部依赖工具
 - 无上下文压缩 / 无重试降级
-- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);只读技能已支持(SkillStore + `skill_view` + 技能索引注入,技能 a);技能创建/编辑/删除已支持(`skill_manage`,技能 b-1);后台技能自改进已支持(技能 c-1);curator 生命周期管理、provenance、技能支持文件尚未实现(技能 c-余)
+- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);只读技能已支持(SkillStore + `skill_view` + 技能索引注入,技能 a);技能创建/编辑/删除已支持(`skill_manage`,技能 b-1);后台技能自改进已支持(技能 c-1);provenance + 自动归档已支持(技能 c-2);curator 合并、技能支持文件、记忆自改进尚未实现(技能 c-3)
 - 仅 GLM provider(抽象已就绪,加新 provider 只需新增实现)
 
 ## 运维备忘
@@ -238,6 +251,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - 记忆持久化在 `~/.hermes-ts/memories/`(MEMORY.md / USER.md)
 - 技能存于 `~/.hermes-ts/skills/<name>/SKILL.md`(frontmatter name/description + 正文)
 - 后台技能自改进阈值 `HERMES_SKILL_NUDGE_INTERVAL`(默认 10,`0`=关闭);review 用独立无 prompt guard,后台禁删技能
+- 技能自动归档 `HERMES_SKILL_ARCHIVE_DAYS`(默认 30,`0`=关闭);归档存 `~/.hermes-ts/skills/.archive/`,只动 agent 自建技能;provenance 在 `~/.hermes-ts/skills/.usage.json`;启动时跑 + `/curate` 手动
 - `better-sqlite3` 预编译二进制从 GitHub CDN 拉取偶发 ECONNRESET;根 `package.json` 的 `pnpm.onlyBuiltDependencies` 已允许其构建,失败可重试或用 C++ 工具链编译
 - GLM 端点按 Key 来源:智谱开放平台 `https://open.bigmodel.cn/api/paas/v4`;GLM Coding Plan(z.ai)`https://api.z.ai/api/coding/paas/v4`
 - 每阶段开工前先实测基线 `pnpm vitest run` 是否全绿(用户可能在会话间自行向 main 提交改动)
