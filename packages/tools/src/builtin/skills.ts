@@ -13,6 +13,7 @@ export const skillViewTool = defineTool({
       const avail = ctx.skills.list().map((s) => s.name).join(', ') || '(无)';
       throw new Error(`未找到技能 "${name}"。可用技能:${avail}`);
     }
+    ctx.skills.recordView(name);
     return content;
   },
 });
@@ -38,7 +39,7 @@ export const skillManageTool = defineTool({
     switch (action) {
       case 'create': {
         if (args.content === undefined) throw new Error('create 需要 content(完整 SKILL.md)');
-        ctx.skills.create(name, args.content, args.category);
+        ctx.skills.create(name, args.content, args.category, { agentCreated: ctx.backgroundReview ?? false });
         return `已创建技能 "${name}"。`;
       }
       case 'edit': {

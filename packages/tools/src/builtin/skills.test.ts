@@ -88,3 +88,20 @@ test('skill_manage 已注册(builtinTools 含 skill_manage)', async () => {
   const { builtinTools } = await import('./index.js');
   expect(builtinTools.map((t) => t.name)).toContain('skill_manage');
 });
+
+test('skill_manage create 默认 agentCreated=false(前台)', async () => {
+  await skillManageTool.handler({ action: 'create', name: 'fg', content: FM('fg') }, ctxA());
+  expect(skills.usageEntries().find(([n]) => n === 'fg')?.[1].agentCreated).toBe(false);
+});
+
+test('skill_manage create 在 backgroundReview 下标 agentCreated=true', async () => {
+  const ctx = { cwd: process.cwd(), logger: createLogger('test'), skills, backgroundReview: true };
+  await skillManageTool.handler({ action: 'create', name: 'bg', content: FM('bg') }, ctx);
+  expect(skills.usageEntries().find(([n]) => n === 'bg')?.[1].agentCreated).toBe(true);
+});
+
+test('skill_view 记一次 view', async () => {
+  skills.create('demo2', FM('demo2'));
+  await skillViewTool.handler({ name: 'demo2' }, ctxA());
+  expect(skills.usageEntries().find(([n]) => n === 'demo2')?.[1].viewCount).toBe(1);
+});

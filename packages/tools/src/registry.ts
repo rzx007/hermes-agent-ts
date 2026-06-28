@@ -13,6 +13,7 @@ export interface ToolContext {
   memory?: MemoryStore;
   sessionDb?: SessionDB;
   skills?: SkillStore;
+  backgroundReview?: boolean;
 }
 
 export interface ToolDef<T extends z.ZodTypeAny = z.ZodTypeAny> {

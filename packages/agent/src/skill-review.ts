@@ -65,7 +65,7 @@ export async function runSkillReview(
       if (result.toolCalls.length === 0) break;
       iterations++;
       for (const call of result.toolCalls) {
-        const output = await deps.registry.call(call.name, call.arguments, ctx);
+        const output = await deps.registry.call(call.name, call.arguments, { ...ctx, backgroundReview: true });
         messages.push({ role: 'tool', content: output, toolCallId: call.id || uuid(), name: call.name });
         if (call.name === 'skill_manage' && SUCCESS_PREFIXES.some((p) => output.startsWith(p))) {
           actions.push(output);

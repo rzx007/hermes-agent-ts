@@ -93,6 +93,15 @@ test('runSkillReview: provider 抛错 → 返回 error、不崩、actions 空', 
   expect(sum.actions).toEqual([]);
 });
 
+test('runSkillReview 写入标记为 agent 建(backgroundReview 注入)', async () => {
+  const { provider } = scripted([
+    { content: null, toolCalls: [tc('1', 'skill_manage', { action: 'create', name: 'learned', content: SKILL('learned') })], finishReason: 'tool_calls' },
+    { content: '完成。', toolCalls: [], finishReason: 'stop' },
+  ]);
+  await runSkillReview({ provider, registry, model: 'm' }, snapshot, reviewCtx());
+  expect(skills.usageEntries().find(([n]) => n === 'learned')?.[1].agentCreated).toBe(true);
+});
+
 test('shouldTriggerReview: 阈值/关闭/缺 skill_manage', () => {
   expect(shouldTriggerReview(10, 10, ['skill_manage'])).toBe(true);
   expect(shouldTriggerReview(9, 10, ['skill_manage'])).toBe(false);
