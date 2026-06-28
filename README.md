@@ -2,7 +2,7 @@
 
 用 TypeScript 复刻 [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent)（原项目为 Python）。**架构级对齐 + 惯用 TS 重写**，分阶段推进。
 
-## 当前状态：阶段 3b（会话全文搜索）✅ + 技能（只读 + skill_manage 写入）✅
+## 当前状态：阶段 3b（会话全文搜索）✅ + 技能（只读 + skill_manage 写入 + 后台自改进）✅
 
 一个能跑通「对话 → 工具调用 → 多轮循环 → 会话持久化」的可用 AI 代理：具备工具集分组、一套本地文件/代码工具（读、写、精确编辑、搜索、列目录、执行命令）、危险命令审批、跨会话长期记忆,以及跨会话历史全文搜索。
 
@@ -13,6 +13,7 @@
 - 阶段 3b（会话全文搜索）✅ — SessionDB trigram FTS5 + `session_search` 工具 + `search` 工具集
 - 技能 a（只读技能）✅ — SkillStore + `skill_view` 工具 + `skills` 工具集 + 技能索引注入 system prompt
 - 技能 b-1（skill_manage 写入）✅ — `skill_manage` 创建/编辑/精确替换/删除技能 + 即时热更新 + delete 审批确认
+- 技能 c-1（自改进 review）✅ — 达阈值轮次后后台复盘会话、用 `skill_manage` 自动创建/精炼技能（不阻塞、禁删）
 
 - **@hermes/core** — 核心类型、`~/.hermes-ts` 路径、配置加载、pino 日志、SQLite 会话持久化（SessionDB）
 - **@hermes/providers** — Provider 抽象 + OpenAI 兼容流式客户端（含流式 tool_call 分片聚合）+ GLM 工厂
@@ -116,7 +117,8 @@ agent 具备可读写的「技能」（程序性知识）：
 - 模型用 `skill_view` 工具按名读取技能正文（操作步骤 / 最佳实践）。
 - 模型用 `skill_manage` 工具维护技能：`create`（新建）/ `edit`（整体重写 SKILL.md）/ `patch`（精确替换正文片段）/ `delete`（删除）。写入**即时热更新**——同会话 `skill_view` 立即可读、下一轮系统提示索引立即反映。校验 name/frontmatter/正文/大小并限定写入技能根内（原子写、防路径穿越）；`delete` 经命令审批确认（复用 `ApprovalGuard`）。
 - 归入 `skills` 工具集（并入 `core`）。
-- 后台技能自改进（self-improvement）与生命周期管家（curator）留待后续阶段（技能 c）。
+- **后台自改进**：某轮工具迭代数达阈值（默认 10，`HERMES_SKILL_NUDGE_INTERVAL=0` 关闭）后，回复发出即在后台复盘本会话，用 `skill_manage` 自动创建/精炼技能；后台**禁删**技能（无审批通道），成果下一轮系统提示即热更新可见，全程不阻塞用户、不写会话库。
+- 生命周期管家（curator）、provenance、技能支持文件留待后续阶段。
 
 ## 运行
 
@@ -156,7 +158,7 @@ docs/superpowers/
 
 ## 路线图
 
-阶段 1（核心代理）✅ → 阶段 2（工具系统）✅ → 阶段 2.5（命令审批）✅ → 阶段 3a（记忆系统）✅ → 阶段 3b（session_search 全文搜索）✅ → 技能 a（只读技能）✅ → 技能 b-1（skill_manage CRUD）✅ → 技能 c（自改进 + curator，下一步）→ 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
+阶段 1（核心代理）✅ → 阶段 2（工具系统）✅ → 阶段 2.5（命令审批）✅ → 阶段 3a（记忆系统）✅ → 阶段 3b（session_search 全文搜索）✅ → 技能 a（只读技能）✅ → 技能 b-1（skill_manage CRUD）✅ → 技能 c-1（自改进 review）✅ → 技能 c-余（curator + provenance + 支持文件，下一步）→ 4 完整 CLI/TUI → 5 MCP/Cron/委派 → 6 网关（Telegram 等）→ 7 ACP/Web/批量轨迹。
 
 设计与计划见 `docs/superpowers/`。
 
@@ -165,5 +167,5 @@ docs/superpowers/
 - 工具均为本地执行；尚无远程终端后端（docker/ssh，后续阶段）
 - 无 web/vision/browser 等外部依赖工具（后续阶段）
 - 无上下文压缩 / 无重试降级（后续阶段）
-- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；跨会话全文搜索已支持（`session_search` 工具，阶段 3b）；只读技能已支持（SkillStore + `skill_view` + 技能索引注入，技能 a）；技能创建/编辑/删除已支持（`skill_manage`，技能 b-1）；后台自改进与 curator 生命周期管理仍未实现（技能 c，后续阶段）
+- 跨会话记忆已支持（`memory` 工具 + system prompt 注入）；跨会话全文搜索已支持（`session_search` 工具，阶段 3b）；只读技能已支持（SkillStore + `skill_view` + 技能索引注入，技能 a）；技能创建/编辑/删除已支持（`skill_manage`，技能 b-1）；后台技能自改进已支持（技能 c-1）；curator 生命周期管理、provenance、技能支持文件仍未实现（后续阶段）
 - 仅支持 GLM provider（Provider 抽象已就绪，加新 provider 只需新增实现）

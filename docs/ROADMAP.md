@@ -27,7 +27,8 @@
 | 3b | session_search(会话全文搜索) | ✅ 完成 |
 | 技能 a | 只读技能:SkillStore + skill_view + 索引注入 | ✅ 完成 |
 | 技能 b-1 | skill_manage CRUD(create/edit/patch/delete)+ 热更新 + delete 审批 | ✅ 完成 |
-| 技能 c | 自改进(后台 review fork)+ curator 生命周期管家 | ⏸️ 计划 |
+| 技能 c-1 | 自改进 review(后台异步,达阈值复盘→skill_manage) | ✅ 完成 |
+| 技能 c-余 | curator 生命周期 + provenance + 技能支持文件 | ⏸️ 计划 |
 | 4 | 完整 CLI / TUI | ⏸️ 计划 |
 | 5 | MCP / Cron / 委派子代理 | ⏸️ 计划 |
 | 6 | 网关(Telegram/Discord/...) | ⏸️ 计划 |
@@ -167,9 +168,21 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - **skill_manage 工具**(`@hermes/tools/builtin/skills.ts`):create/edit/patch/delete 分发,必填参校验抛错回灌模型,delete 经 `ctx.approval.confirm` 确认(被拒返回原因、不删);归入 `skills` toolset(已并入 `core`)
 - **接线**:复用技能 a + 阶段 2.5 既有注入(`LoopDeps.skills` / `ctx.skills` / `ctx.approval`),无需改 loop/repl/main——同一个 SkillStore 实例,热更新天然贯通 system prompt 与工具
 
-### 技能 c:自改进 + curator ⏸️ 推迟
+### 技能 c-1:自改进 review ✅
 
-**计划做**:后台技能自改进(某轮工具迭代数达阈值后,回复发出后台 spawn 受限 fork,反思对话并提炼/修订技能;provenance 区分「用户建」vs「agent 建」)、curator 生命周期管家(按 `.usage.json` 的 active/stale/archived 自动归档/合并),以及技能支持文件(`write_file`/`remove_file` 写 references/templates/scripts/assets)。
+**目标**:某轮工具迭代数达阈值后,回复发出即在后台复盘本会话,用 `skill_manage` 自动创建/精炼技能——不阻塞用户、不写用户会话、不抢占输出。
+
+**已做(MVP)**:
+- **runSkillReview**(`@hermes/agent/skill-review.ts`):独立后台工具循环,复用 provider+registry,**不持久化/不流式输出**,只给 `skill_view`+`skill_manage`,喂 review 专用系统提示;best-effort(整体 try/catch,异常不外抛,返回 `{actions, iterations, error?}`);成功的 skill_manage 动作收入 `actions`。
+- **触发**:`turn_done` 暴露本轮工具迭代数;`shouldTriggerReview(iterations, interval, enabledTools)` 纯函数(阈值>0 且达标且 `skill_manage` 启用);repl 在正常收尾(非中断)后 fire-and-track,**不 await**,重叠跳过,`/exit`·`/new` 前 await in-flight(SIGINT 硬退出不 await,best-effort 取舍)。
+- **安全**:repl 另建一个**无 prompt + 独立空 allowlist** 的 `ApprovalGuard` 专供 review → 后台 `skill_manage delete` 必被 `confirm()` 挡下(自改进只增/精炼,**不删**);create/edit/patch 照常。
+- **config**:`skillNudgeInterval`(`HERMES_SKILL_NUDGE_INTERVAL`,默认 10,`0`=关闭;解析特判 0 不走 `||`)。
+- **热更新**:与主流程**同一 SkillStore 实例**,自改进成果下一轮系统提示索引即可见。
+- **接线零侵入主循环**:runner 独立于 `ConversationLoop`,只在 repl 收尾处接。
+
+### 技能 c-余:curator + provenance + 支持文件 ⏸️ 推迟
+
+**计划做**:provenance(`.usage.json` 标 `agent_created`,区分用户建/agent 建)、curator 生命周期管家(按 active/stale/archived 自动归档/合并 agent 建的技能)、技能支持文件(`write_file`/`remove_file` 写 references/templates/scripts/assets)、记忆自改进(本次只自改进技能)。
 
 ---
 
@@ -215,7 +228,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - 工具均本地执行,无远程后端
 - 无 web/vision/browser 等外部依赖工具
 - 无上下文压缩 / 无重试降级
-- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);只读技能已支持(SkillStore + `skill_view` + 技能索引注入,技能 a);技能创建/编辑/删除已支持(`skill_manage`,技能 b-1);后台自改进与 curator 生命周期管理尚未实现(技能 c)
+- 跨会话记忆已支持(memory 工具 + 系统提示注入);跨会话全文搜索已支持(`session_search` 工具,阶段 3b);只读技能已支持(SkillStore + `skill_view` + 技能索引注入,技能 a);技能创建/编辑/删除已支持(`skill_manage`,技能 b-1);后台技能自改进已支持(技能 c-1);curator 生命周期管理、provenance、技能支持文件尚未实现(技能 c-余)
 - 仅 GLM provider(抽象已就绪,加新 provider 只需新增实现)
 
 ## 运维备忘
@@ -224,6 +237,7 @@ hermes 的标志性"自进化"能力。因记忆与技能各自较大,拆成 3a(
 - 命令审批白名单(`always` 永久放行)持久化在 `~/.hermes-ts/allowlist.json`
 - 记忆持久化在 `~/.hermes-ts/memories/`(MEMORY.md / USER.md)
 - 技能存于 `~/.hermes-ts/skills/<name>/SKILL.md`(frontmatter name/description + 正文)
+- 后台技能自改进阈值 `HERMES_SKILL_NUDGE_INTERVAL`(默认 10,`0`=关闭);review 用独立无 prompt guard,后台禁删技能
 - `better-sqlite3` 预编译二进制从 GitHub CDN 拉取偶发 ECONNRESET;根 `package.json` 的 `pnpm.onlyBuiltDependencies` 已允许其构建,失败可重试或用 C++ 工具链编译
 - GLM 端点按 Key 来源:智谱开放平台 `https://open.bigmodel.cn/api/paas/v4`;GLM Coding Plan(z.ai)`https://api.z.ai/api/coding/paas/v4`
 - 每阶段开工前先实测基线 `pnpm vitest run` 是否全绿(用户可能在会话间自行向 main 提交改动)
