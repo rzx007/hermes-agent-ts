@@ -203,8 +203,11 @@ export class SkillStore {
     if (lstatSync(skillDir).isSymbolicLink()) throw new Error('拒绝归档 symlink/junction 链接目录');
     const archiveRoot = join(this.dir, '.archive');
     mkdirSync(archiveRoot, { recursive: true });
-    const target = join(archiveRoot, basename(skillDir));
-    rmSync(target, { recursive: true, force: true }); // 清掉同名旧归档(再次归档同名)
+    // 目标按目录叶名归档;若已被占用(同叶名的不同技能、或同名技能反复归档)则加后缀,
+    // 绝不覆盖既有归档(.archive 是回收站,宁可累积也不丢历史)。
+    const leaf = basename(skillDir);
+    let target = join(archiveRoot, leaf);
+    for (let n = 1; existsSync(target); n++) target = join(archiveRoot, `${leaf}.${n}`);
     renameSync(skillDir, target);
     this.usage.record(name, { state: 'archived' });
     const idx = this.skills.indexOf(existing);
