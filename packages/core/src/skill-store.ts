@@ -78,7 +78,7 @@ export class SkillStore {
         return;
       }
       for (const ent of entries) {
-        if (ent.name === 'node_modules' || ent.name === '.git') continue;
+        if (ent.name === 'node_modules' || ent.name === '.git' || ent.name === '.archive') continue;
         const full = join(d, ent.name);
         if (ent.isDirectory()) walk(full);
         else if (ent.name === 'SKILL.md') out.push(full);
@@ -190,6 +190,26 @@ export class SkillStore {
     if (idx >= 0) this.skills.splice(idx, 1);
     this.byName.delete(name);
     this.usage.remove(name);
+  }
+
+  archive(name: string): void {
+    const existing = this.byName.get(name);
+    if (!existing) throw new Error(`技能 "${name}" 不存在`);
+    const skillDir = dirname(existing.file);
+    const root = resolve(this.dir);
+    const resolved = resolve(skillDir);
+    if (resolved === root) throw new Error('拒绝归档技能根目录');
+    if (!resolved.startsWith(root + sep)) throw new Error('拒绝归档技能根目录之外的路径');
+    if (lstatSync(skillDir).isSymbolicLink()) throw new Error('拒绝归档 symlink/junction 链接目录');
+    const archiveRoot = join(this.dir, '.archive');
+    mkdirSync(archiveRoot, { recursive: true });
+    const target = join(archiveRoot, basename(skillDir));
+    rmSync(target, { recursive: true, force: true }); // 清掉同名旧归档(再次归档同名)
+    renameSync(skillDir, target);
+    this.usage.record(name, { state: 'archived' });
+    const idx = this.skills.indexOf(existing);
+    if (idx >= 0) this.skills.splice(idx, 1);
+    this.byName.delete(name);
   }
 
   recordView(name: string): void {

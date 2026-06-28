@@ -315,3 +315,38 @@ test('delete 同时移除 usage 条目', () => {
   store.delete('a');
   expect(store.usageEntries().some(([n]) => n === 'a')).toBe(false);
 });
+
+test('archive 移到 .archive + 移出索引 + usage.state=archived', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'), undefined, { agentCreated: true });
+  store.archive('a');
+  expect(existsSync(join(dir, 'a'))).toBe(false);
+  expect(existsSync(join(dir, '.archive', 'a', 'SKILL.md'))).toBe(true);
+  expect(store.getContent('a')).toBeNull();
+  expect(store.list().some((s) => s.name === 'a')).toBe(false);
+  expect(store.usageEntries().find(([n]) => n === 'a')?.[1].state).toBe('archived');
+});
+
+test('归档后重扫不再加载(跳过 .archive)', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'), undefined, { agentCreated: true });
+  store.archive('a');
+  const store2 = new SkillStore(dir);
+  expect(store2.getContent('a')).toBeNull();
+  expect(store2.list().some((s) => s.name === 'a')).toBe(false);
+});
+
+test('archive 不存在的技能报错', () => {
+  const store = new SkillStore(dir);
+  expect(() => store.archive('nope')).toThrow(/不存在/);
+});
+
+test('归档后前台同名重建 → provenance 重置为用户建、不再可归档(C2)', () => {
+  const store = new SkillStore(dir);
+  store.create('reborn', SKILL('reborn'), undefined, { agentCreated: true });
+  store.archive('reborn');
+  store.create('reborn', SKILL('reborn')); // 前台重建(默认 agentCreated=false)
+  const e = store.usageEntries().find(([n]) => n === 'reborn')?.[1];
+  expect(e?.agentCreated).toBe(false);
+  expect(e?.state).toBe('active');
+});
