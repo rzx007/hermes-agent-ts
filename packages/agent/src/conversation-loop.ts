@@ -83,7 +83,7 @@ export async function* runConversation(
   const tools = registry.getSchemas(deps.toolNames);
 
   try {
-    let toolIterations = 0;
+    let toolIterations = 0; // 统计发起过工具调用的轮数(纯文本收尾轮不计;一轮内 N 个并行调用算 1)
     for (let iteration = 0; iteration < maxIterations; iteration++) {
       if (ctx.signal?.aborted) { yield { type: 'error', error: '已中断' }; return; }
       // a. 流式调模型：边收边发 assistant_delta，同时缓存 chunk 供聚合
