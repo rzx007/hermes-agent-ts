@@ -36,6 +36,8 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
   const enabledTools = deps.toolNames ?? deps.registry.getToolNames();
   let inFlightReview: Promise<void> | null = null;
 
+  // 注:SIGINT 硬退出不 await in-flight 自改进 review(与 /exit、/new 的 await 不对称);
+  // 这是有意的 best-effort 取舍——技能写入是单次文件操作,被打断风险低,不值得为硬退出阻塞。
   rl.on('SIGINT', () => {
     console.log(pc.yellow('\n退出 Hermes'));
     db.endSession(session.id);
