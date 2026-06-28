@@ -269,3 +269,40 @@ test('delete 软链接技能目录被拒（不删 symlink/junction）', async ()
   }
   rmSync(target, { recursive: true, force: true });
 });
+
+test('create 记 provenance:前台默认 agentCreated=false', () => {
+  const store = new SkillStore(dir);
+  store.create('u1', SKILL('u1'));
+  const e = store.usageEntries().find(([n]) => n === 'u1')?.[1];
+  expect(e?.agentCreated).toBe(false);
+  expect(e?.state).toBe('active');
+});
+
+test('create 透传 agentCreated=true', () => {
+  const store = new SkillStore(dir);
+  store.create('a1', SKILL('a1'), undefined, { agentCreated: true });
+  expect(store.usageEntries().find(([n]) => n === 'a1')?.[1].agentCreated).toBe(true);
+});
+
+test('recordView 更新 lastUsedAt/viewCount(仅已知技能)', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  store.recordView('a');
+  expect(store.usageEntries().find(([n]) => n === 'a')?.[1].viewCount).toBe(1);
+  store.recordView('nope'); // 未知,无副作用
+  expect(store.usageEntries().some(([n]) => n === 'nope')).toBe(false);
+});
+
+test('patch 记一次 patch', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a', 'd', 'dup once'));
+  store.patch('a', 'once', 'twice');
+  expect(store.usageEntries().find(([n]) => n === 'a')?.[1].patchCount).toBe(1);
+});
+
+test('delete 同时移除 usage 条目', () => {
+  const store = new SkillStore(dir);
+  store.create('a', SKILL('a'));
+  store.delete('a');
+  expect(store.usageEntries().some(([n]) => n === 'a')).toBe(false);
+});

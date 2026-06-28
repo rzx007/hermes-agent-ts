@@ -5,6 +5,7 @@ import {
 import { join, relative, dirname, basename, sep, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { Logger } from './logging.js';
+import { SkillUsage, type SkillUsageEntry } from './skill-usage.js';
 
 export interface SkillMeta {
   name: string;
@@ -21,9 +22,11 @@ export class SkillStore {
   private readonly skills: SkillEntry[] = [];
   private readonly byName = new Map<string, SkillEntry>();
   private readonly dir: string;
+  private readonly usage: SkillUsage;
 
   constructor(dir: string, logger?: Logger) {
     this.dir = dir;
+    this.usage = new SkillUsage(join(dir, '.usage.json'), logger);
     if (!existsSync(dir)) return;
     const files = this.findSkillFiles(dir).sort();
     for (const file of files) {
@@ -107,7 +110,7 @@ export class SkillStore {
     return { name, description, category, content: body, file };
   }
 
-  create(name: string, content: string, category?: string): { path: string } {
+  create(name: string, content: string, category?: string, opts?: { agentCreated?: boolean }): { path: string } {
     validateSkillName(name);
     if (category !== undefined) validateCategory(category);
     const meta = validateAndParseContent(content);
@@ -125,6 +128,7 @@ export class SkillStore {
       const entry = this.parseSkill(this.dir, file);
       this.skills.push(entry);
       this.byName.set(entry.name, entry);
+      this.usage.create(name, { agentCreated: opts?.agentCreated ?? false });
       return { path: file };
     } catch (e) {
       // 写盘/解析中途失败:回滚刚建的目录,避免磁盘残留与内存不一致(仅清自己新建的,勿动共享 category 目录)
@@ -146,6 +150,7 @@ export class SkillStore {
     // name 不可变 → 文件不移动 → category 不变,只需就地同步 content/description(skills[] 与 byName 共享同一对象)
     existing.content = meta.body;
     existing.description = meta.description;
+    this.usage.record(name, { patch: true });
     return { path: existing.file };
   }
 
@@ -165,6 +170,7 @@ export class SkillStore {
     atomicWrite(existing.file, next);
     existing.content = meta.body;
     existing.description = meta.description;
+    this.usage.record(name, { patch: true });
     return { path: existing.file };
   }
 
@@ -183,6 +189,15 @@ export class SkillStore {
     const idx = this.skills.indexOf(existing);
     if (idx >= 0) this.skills.splice(idx, 1);
     this.byName.delete(name);
+    this.usage.remove(name);
+  }
+
+  recordView(name: string): void {
+    if (this.byName.has(name)) this.usage.record(name, { view: true });
+  }
+
+  usageEntries(): Array<[string, SkillUsageEntry]> {
+    return this.usage.entries();
   }
 
   private assertWithinRoot(p: string): void {
