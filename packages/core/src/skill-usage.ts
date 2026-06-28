@@ -36,6 +36,7 @@ export class SkillUsage {
     }
   }
 
+  // 注:get/entries 返回 map 内的活引用,勿直接改字段;变更一律走 create/record(才会落盘)。
   get(name: string): SkillUsageEntry | undefined { return this.map.get(name); }
   entries(): Array<[string, SkillUsageEntry]> { return [...this.map.entries()]; }
 
