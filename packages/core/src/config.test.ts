@@ -33,3 +33,16 @@ test('HERMES_APPROVAL_MODE=off → off', () => {
 test('默认 approvalMode = manual', () => {
   expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k' } as NodeJS.ProcessEnv).approvalMode).toBe('manual');
 });
+
+test('skillNudgeInterval 默认 10', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k' } as NodeJS.ProcessEnv).skillNudgeInterval).toBe(10);
+});
+test('skillNudgeInterval 读 env', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_NUDGE_INTERVAL: '5' } as NodeJS.ProcessEnv).skillNudgeInterval).toBe(5);
+});
+test('skillNudgeInterval=0 表示关闭(不被默认覆盖)', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_NUDGE_INTERVAL: '0' } as NodeJS.ProcessEnv).skillNudgeInterval).toBe(0);
+});
+test('skillNudgeInterval 非法值回退 10', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_NUDGE_INTERVAL: 'abc' } as NodeJS.ProcessEnv).skillNudgeInterval).toBe(10);
+});

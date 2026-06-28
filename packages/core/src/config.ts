@@ -12,6 +12,7 @@ export interface HermesConfig {
   enabledToolsets?: string[];
   disabledToolsets?: string[];
   approvalMode?: 'manual' | 'off';
+  skillNudgeInterval: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
@@ -21,6 +22,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
     if (v !== undefined && v.trim() !== '') return v.split(',').map((s) => s.trim()).filter(Boolean);
     if (Array.isArray(fileVal)) return (fileVal as unknown[]).map(String);
     return undefined;
+  };
+  const parseInterval = (v: string | undefined, fileVal: unknown): number => {
+    if (v !== undefined && v.trim() !== '') {
+      const n = Number(v);
+      return Number.isNaN(n) ? 10 : n;
+    }
+    if (typeof fileVal === 'number') return fileVal;
+    return 10;
   };
   const provider = env.HERMES_PROVIDER ?? fromFile.provider ?? 'glm';
   const isTruthy = (v: string | undefined): boolean =>
@@ -37,5 +46,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HermesConfig {
     enabledToolsets: parseList(env.HERMES_ENABLED_TOOLSETS, fromFile.enabledToolsets),
     disabledToolsets: parseList(env.HERMES_DISABLED_TOOLSETS, fromFile.disabledToolsets),
     approvalMode,
+    skillNudgeInterval: parseInterval(env.HERMES_SKILL_NUDGE_INTERVAL, fromFile.skillNudgeInterval),
   };
 }
