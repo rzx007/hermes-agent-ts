@@ -67,36 +67,34 @@ export class SkillUsage {
   constructor(path: string, logger?: Logger);          // 加载容错:坏 json → 空 map + warn
   get(name: string): SkillUsageEntry | undefined;
   entries(): Array<[string, SkillUsageEntry]>;
-  record(name: string, opts: { agentCreated?: boolean; view?: boolean; patch?: boolean; state?: SkillState; now?: Date }): void;
+  create(name: string, opts: { agentCreated: boolean; now?: Date }): void;   // 身份事件:整条覆盖
+  record(name: string, opts: { view?: boolean; patch?: boolean; state?: SkillState; now?: Date }): void; // 变更事件:就地改
   remove(name: string): void;
 }
 ```
-`record` 语义：
-- 条目不存在 → 新建（`createdAt = lastUsedAt = now`；`agentCreated = opts.agentCreated ?? false`；`viewCount=patchCount=0`；`state='active'`）。
-- `opts.view` → `viewCount++`、`lastUsedAt=now`。
-- `opts.patch` → `patchCount++`、`lastUsedAt=now`。
-- `opts.state` → 设置 state（curator 归档用）。
-- `agentCreated` 只在**首建**时按入参定，后续不被覆盖（避免 edit 把用户建误标）。
-- 每次变更后原子写盘（tmp+rename，失败 warn 不抛）。
-- `now` 默认 `new Date()`，可注入便于测试。
+**两类写入分离**（这是修正「归档后同名重建」provenance 损坏的关键）：
+
+- `create(name, {agentCreated, now})` —— **技能身份的定义事件，整条覆盖/新建**：`createdAt = lastUsedAt = now`，`viewCount = patchCount = 0`，`state = 'active'`，`agentCreated = 入参`。**会覆盖任何已存在的旧条目**（含被归档后 state='archived'/agentCreated=true 的残留），所以前台重建一个曾被 curator 归档的同名技能时，provenance 被正确重置为「用户建、active」。
+- `record(name, {view?, patch?, state?, now})` —— **变更事件，就地改已有条目**；若条目不存在则先以 `agentCreated=false` 新建一条 active（覆盖「磁盘上已有但无 usage 条目」的旧技能首次被 view/patch 的情况）。`view` → `viewCount++`+`lastUsedAt=now`；`patch` → `patchCount++`+`lastUsedAt=now`；`state` → 设置 state。**record 永不改 `agentCreated`**（避免 edit/patch 误标用户建技能）。
+- 每次变更后原子写盘（tmp+rename，失败 warn 不抛）。`now` 默认 `new Date()`，可注入便于测试。
 
 **关键不变量**：`.usage.json` 里**没有条目的技能 = 用户建（agentCreated 视为 false）**，curator 永不动它——保证向后兼容已有技能与保守安全。
 
 ### ② SkillStore 集成（改 `skill-store.ts`）
 
 - 构造时 `this.usage = new SkillUsage(join(dir, '.usage.json'), logger)`。
-- `create(name, content, category?, opts?: { agentCreated?: boolean })`：写盘+入索引后 `this.usage.record(name, { agentCreated: opts?.agentCreated ?? false })`。
+- `create(name, content, category?, opts?: { agentCreated?: boolean })`：写盘+入索引后 `this.usage.create(name, { agentCreated: opts?.agentCreated ?? false })`（用 `create` 整条覆盖，保证同名重建重置 provenance）。注:新增的可选第 4 参对现有 3 参调用方（skill_manage）向后兼容。
 - `edit` / `patch`：成功后 `this.usage.record(name, { patch: true })`。
 - `delete`：移出索引后 `this.usage.remove(name)`。
 - 新增 `recordView(name)`：`if (this.byName.has(name)) this.usage.record(name, { view: true })`（只为已知技能记）。
+- 新增 `usageEntries(): Array<[string, SkillUsageEntry]>` 转发 `this.usage.entries()`，供 curator 读取（**只暴露这一个读取入口**，不另出 `getUsage()`）。
 - 新增 `archive(name): void`：
   - `byName.get(name)`；不存在 throw。
   - 三重路径安全（同 delete：根内 `startsWith(root+sep)` / 非根 / 非 symlink `lstatSync`）。
   - 目标 = `join(dir, '.archive', name)`；若已存在先 `rmSync` 旧的（再次归档同名）；`renameSync(skillDir, target)`。
   - `this.usage.record(name, { state: 'archived' })`。
   - 移出 `skills[]` + `byName`（不再被提供/注入索引）。
-- `findSkillFiles` 的跳过集合加入 `.archive`（与 `node_modules`/`.git` 并列），使归档技能不被重扫加载。
-- 暴露 `getUsage(): SkillUsage`（或 `usageEntries()`）供 curator 读取。
+- `findSkillFiles` 的跳过集合加入 `.archive`（与 `node_modules`/`.git` 并列），使归档技能不被重扫加载。`.usage.json` 本就不会被当技能(扫描只收 `SKILL.md`)。
 
 ### ③ runCurator（`@hermes/core/skill-curator.ts`）
 
@@ -108,7 +106,7 @@ export function runCurator(skills: SkillStore, opts: CuratorOpts): CuratorReport
 逻辑：
 - `archiveAfterDays <= 0` → 直接返回 `{scanned:0, archived:[]}`（关闭）。
 - 遍历 `skills.usageEntries()`：仅 `agentCreated === true && state === 'active'`。
-- 闲置天数 = `(now - new Date(lastUsedAt ?? createdAt)) / 天`；> `archiveAfterDays` → `skills.archive(name)`，记入 `archived`。
+- 闲置天数 = `(now - new Date(lastUsedAt ?? createdAt)) / 天`；> `archiveAfterDays` → `skills.archive(name)`，记入 `archived`。（正常条目 `lastUsedAt` 必有值;`?? createdAt` 仅为防御坏数据。若时间戳缺/坏 → `Invalid Date` → 天数 `NaN` → `NaN > x` 为 false → **不归档**,保守安全。）
 - 单条归档异常 → warn 跳过（best-effort，不中断整体）。
 - 返回报告供打印。
 
@@ -116,16 +114,16 @@ export function runCurator(skills: SkillStore, opts: CuratorOpts): CuratorReport
 - `ToolContext` 加 `backgroundReview?: boolean`。
 - `skill_view`（`builtin/skills.ts`）：取到 content 后、return 前 `ctx.skills.recordView(name)`。
 - `skill_manage` create 分支：`ctx.skills.create(name, args.content, args.category, { agentCreated: ctx.backgroundReview ?? false })`。
-- `runSkillReview`（`skill-review.ts`）：执行工具时 `registry.call(call.name, call.arguments, { ...ctx, backgroundReview: true })`——自改进写入权威地标记为 agent 自建，不依赖调用方设置。
+- `runSkillReview`（`skill-review.ts`）：**唯一注入点 = runner 内 `registry.call` 那一行**（现为 `registry.call(call.name, call.arguments, ctx)`，改成 `{ ...ctx, backgroundReview: true }`）——自改进写入在此权威地标记为 agent 自建，不依赖调用方设置。**注意：repl 里构造 `reviewCtx` 字面量时不要设 `backgroundReview`**（单一真相源在 runner，避免两处都设导致漂移）。
 
 ### ⑤ CLI 接线
-- `config.skillArchiveDays`：解析特判 0（同 c-1 的 `parseInterval` 风格，不用 `||`），默认 30。
+- `config.skillArchiveDays`：默认 **30**，`0`=关闭，不用 `||`。注:现有 `parseInterval`(config.ts) 的 NaN 回退硬编码为 10——**不能直接复用**。把它**泛化为带默认参的 `parseIntConfig(v, fileVal, fallback)`**(NaN/缺省 → fallback)，并把 `skillNudgeInterval` 改用 `parseIntConfig(env.HERMES_SKILL_NUDGE_INTERVAL, fromFile.skillNudgeInterval, 10)`、`skillArchiveDays` 用 `..., 30)`。`0` 在两者都原样保留(不被当 falsy)。
 - `main.ts`：构造 skills 后、进 repl 前：
   ```ts
   const report = runCurator(skills, { archiveAfterDays: config.skillArchiveDays, now: new Date() });
   if (report.archived.length) logger.info(...) / console.log(`🗃 已归档 ${report.archived.length} 个久未用技能:${report.archived.join(', ')}`);
   ```
-- `repl.ts`：`/curate` 命令——跑 `runCurator` 并打印报告（归档了哪些 / 无可归档）。需要 repl 能拿到 `skillArchiveDays`（加入 `ReplOptions`）。
+- `repl.ts`：`/curate` 命令——跑 `runCurator(deps.skills, {archiveAfterDays, now:new Date()})` 并打印报告:`skillArchiveDays===0` → 「归档已关闭(HERMES_SKILL_ARCHIVE_DAYS=0)」;否则归档非空打印列表、空则「无可归档技能」。需要 repl 拿到 `skillArchiveDays`（加入 `ReplOptions`，由 main 传入）。repl 已有 `deps.skills`。
 
 ## 数据流
 
@@ -145,12 +143,15 @@ export function runCurator(skills: SkillStore, opts: CuratorOpts): CuratorReport
 - usage 写盘失败 → warn，不抛（provenance 是辅助信息，不应阻断主操作）。
 - curator 单条 archive 失败 → warn 跳过；整体 best-effort，绝不阻断启动或 repl。
 - archive 路径安全失败 → throw（在 SkillStore.archive 内，curator 捕获为单条跳过）。
+- usage 条目时间戳缺/坏 → 闲置天数 NaN → 不归档(保守，见 §③)。
 
 ## 测试
 - `SkillUsage`：record 新建/view++/patch++/state 设置；agentCreated 首建定、后续不被覆盖;remove;缺条目 get→undefined；坏 json 容错;原子写后可重新加载。
 - `SkillStore`：create 记 provenance（agentCreated 透传）；recordView 更新 lastUsedAt/viewCount(且只对已知技能)；archive 移盘到 .archive + 移出索引 + usage.state=archived；重扫跳过 .archive(归档技能不再加载)；delete 同时 usage.remove。
-- `runCurator`：只归档 agentCreated+active+超阈值；用户建(无条目或 agentCreated=false)不动;active 未超阈值不动;`archiveAfterDays=0` 关闭;`now` 注入确定性(造一条 lastUsedAt 很久以前的 agent 技能 → 被归档)。
-- provenance 接线:`skill_manage` create 在 `ctx.backgroundReview=true` 下标 agentCreated；前台(无标记)为 false。`skill_view` 调 recordView。
+- `runCurator`：只归档 agentCreated+active+超阈值；用户建(无条目或 agentCreated=false)不动;active 未超阈值不动;`archiveAfterDays=0` 关闭;`now` 注入确定性(造一条 lastUsedAt 很久以前的 agent 技能 → 被归档)；坏时间戳条目 → NaN → 不归档。
+- **同名重建重置 provenance**(对应 C2):create 一个 agent 技能 → archive 它(usage state=archived,agentCreated=true)→ 前台 create 同名 → usage 条目被 `create` 覆盖为 agentCreated=false、state=active(断言不再被 curator 视为可归档)。
+- provenance 接线:`skill_manage` create 在 `ctx.backgroundReview=true` 下标 agentCreated；前台(无标记/3 参旧调用)为 false。`skill_view` 调 recordView。
+- **全 review 路径 provenance**(集成):用 stub provider 驱动 `runSkillReview` 发一个 skill_manage create 调用 → 断言结果 usage 条目 `agentCreated===true`(守住 runner 注入 backgroundReview 这条跨包链)。
 - config:`skillArchiveDays` 默认 30 / env / 0 关闭 / 非法回退（用 HOME() hermetic）。
 
 ## 验收标准（DoD）
