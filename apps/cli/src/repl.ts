@@ -1,11 +1,13 @@
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import pc from 'picocolors';
-import { runConversation, type LoopDeps } from '@hermes/agent';
+import { runConversation, runSkillReview, shouldTriggerReview, type LoopDeps } from '@hermes/agent';
 import { ApprovalGuard, type ToolContext } from '@hermes/tools';
 import { allowlistPath } from '@hermes/core';
 
-export interface ReplOptions { approvalMode: 'manual' | 'off' }
+export interface ReplOptions { approvalMode: 'manual' | 'off'; skillNudgeInterval: number }
 
 export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, options: ReplOptions) {
   const { db } = deps;
@@ -24,6 +26,16 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
     },
   });
 
+  // 后台自改进专用 guard:无 prompt → confirm() 必拒 → skill_manage delete 被挡(只增/精炼,不删)。
+  // 用独立空 allowlist 路径,避免误读前台持久白名单里可能存在的 skill:delete:* 条目。
+  const reviewGuard = new ApprovalGuard({
+    mode: 'manual',
+    allowlistPath: join(tmpdir(), 'hermes-review-noallow.json'),
+    logger: ctx.logger,
+  });
+  const enabledTools = deps.toolNames ?? deps.registry.getToolNames();
+  let inFlightReview: Promise<void> | null = null;
+
   rl.on('SIGINT', () => {
     console.log(pc.yellow('\n退出 Hermes'));
     db.endSession(session.id);
@@ -37,7 +49,7 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
   for (;;) {
     const line = (await rl.question(pc.cyan('\n› '))).trim();
     if (!line) continue;
-    if (line === '/exit') break;
+    if (line === '/exit') { if (inFlightReview) await inFlightReview; break; }
     if (line === '/help') { console.log('/new 新会话  /tools 查看启用工具  /exit 退出  /help 帮助'); continue; }
     if (line === '/tools') {
       const names = deps.toolNames ?? deps.registry.getToolNames();
@@ -46,6 +58,7 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
       continue;
     }
     if (line === '/new') {
+      if (inFlightReview) await inFlightReview;
       db.endSession(session.id);
       session = db.createSession({ source: 'cli', modelConfig: { provider: deps.provider.name, model: deps.model } });
       console.log(pc.dim(`新会话 ${session.id.slice(0, 8)}`));
@@ -61,6 +74,7 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
     };
     process.on('SIGINT', onSig);
 
+    let turnIterations = -1;
     try {
       for await (const ev of runConversation(deps, session.id, line, { ...ctx, signal: controller.signal, approval: guard, memory: deps.memory, sessionDb: deps.db, skills: deps.skills })) {
         switch (ev.type) {
@@ -71,6 +85,7 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
             const u = ev.result.usage;
             stdout.write('\n');
             if (u) console.log(pc.dim(`[tokens ${u.promptTokens}+${u.completionTokens}]`));
+            turnIterations = ev.iterations;
             break;
           }
           case 'error': console.log(pc.red(`\n错误：${ev.error}`)); break;
@@ -78,6 +93,20 @@ export async function repl(deps: LoopDeps, ctx: Omit<ToolContext, 'signal'>, opt
       }
     } finally {
       process.off('SIGINT', onSig);
+    }
+
+    // 后台技能自改进:正常收尾(非中断)、达阈值、且无 in-flight 时触发,不 await
+    if (!controller.signal.aborted && turnIterations >= 0 && !inFlightReview
+        && shouldTriggerReview(turnIterations, options.skillNudgeInterval, enabledTools)) {
+      const snapshot = db.getMessages(session.id);
+      const reviewCtx: ToolContext = { cwd: ctx.cwd, logger: ctx.logger, skills: deps.skills, approval: reviewGuard };
+      inFlightReview = runSkillReview(
+        { provider: deps.provider, registry: deps.registry, model: deps.model },
+        snapshot, reviewCtx,
+      )
+        .then((sum) => { if (sum.actions.length) console.log(pc.dim(`\n💾 自改进:${sum.actions.join(' ')}`)); })
+        .catch(() => { /* best-effort,不影响主流程 */ })
+        .finally(() => { inFlightReview = null; });
     }
   }
 

@@ -35,7 +35,7 @@ async function main() {
 
   const deps = { db, provider, registry, model: config.model, maxIterations: config.maxIterations, toolNames, memory, skills };
   try {
-    await repl(deps, { cwd: process.cwd(), logger }, { approvalMode: config.approvalMode ?? 'manual' });
+    await repl(deps, { cwd: process.cwd(), logger }, { approvalMode: config.approvalMode ?? 'manual', skillNudgeInterval: config.skillNudgeInterval });
   } finally {
     db.close();
   }
