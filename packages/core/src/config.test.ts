@@ -46,3 +46,19 @@ test('skillNudgeInterval=0 表示关闭(不被默认覆盖)', () => {
 test('skillNudgeInterval 非法值回退 10', () => {
   expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_NUDGE_INTERVAL: 'abc' } as NodeJS.ProcessEnv).skillNudgeInterval).toBe(10);
 });
+
+test('skillArchiveDays 默认 30', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k' } as NodeJS.ProcessEnv).skillArchiveDays).toBe(30);
+});
+test('skillArchiveDays 读 env', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_ARCHIVE_DAYS: '7' } as NodeJS.ProcessEnv).skillArchiveDays).toBe(7);
+});
+test('skillArchiveDays=0 关闭', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_ARCHIVE_DAYS: '0' } as NodeJS.ProcessEnv).skillArchiveDays).toBe(0);
+});
+test('skillArchiveDays 非法回退 30', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k', HERMES_SKILL_ARCHIVE_DAYS: 'x' } as NodeJS.ProcessEnv).skillArchiveDays).toBe(30);
+});
+test('skillNudgeInterval 仍默认 10(回归)', () => {
+  expect(loadConfig({ ...HOME(), GLM_API_KEY: 'k' } as NodeJS.ProcessEnv).skillNudgeInterval).toBe(10);
+});
