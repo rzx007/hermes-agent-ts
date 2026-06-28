@@ -17,7 +17,9 @@ export interface ReviewSummary {
 }
 
 const REVIEW_TOOLS = ['skill_view', 'skill_manage'];
-const SUCCESS_PREFIXES = ['已创建', '已更新', '已 patch', '已删除'];
+// 注意:与 @hermes/tools builtin/skills.ts 中 skill_manage 的成功返回串耦合(已创建/已更新/已 patch/已删除…)。
+// 若改动那边的返回文案,这里需同步,否则自改进动作将不被记录(无测试跨包捕获此耦合)。
+const SUCCESS_PREFIXES = ['已创建', '已更新', '已 patch', '已删除'] as const;
 
 const REVIEW_PROMPT = `你是 Hermes 的技能库维护者。下面是一段刚结束的对话，请复盘并在必要时更新技能库（程序性知识）。
 
