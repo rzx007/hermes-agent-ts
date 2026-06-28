@@ -15,9 +15,14 @@ async function main() {
   const memory = new MemoryStore(memoriesDir());
   const logger = createLogger('cli');
   const skills = new SkillStore(skillsDir(), logger);
-  const curated = runCurator(skills, { archiveAfterDays: config.skillArchiveDays, now: new Date(), logger });
-  if (curated.archived.length) {
-    console.log(`🗃 已归档 ${curated.archived.length} 个久未用技能:${curated.archived.join(', ')}`);
+  // 启动时整理技能:best-effort,任何异常(如 .usage.json 损坏)都不应阻断 CLI 启动
+  try {
+    const curated = runCurator(skills, { archiveAfterDays: config.skillArchiveDays, now: new Date(), logger });
+    if (curated.archived.length) {
+      console.log(`🗃 已归档 ${curated.archived.length} 个久未用技能:${curated.archived.join(', ')}`);
+    }
+  } catch (e) {
+    logger.warn(`启动 curator 失败,跳过:${e instanceof Error ? e.message : String(e)}`);
   }
   const db = new SessionDB(sessionDbPath());
   process.on('exit', () => { try { db.close(); } catch { /* already closed */ } });
