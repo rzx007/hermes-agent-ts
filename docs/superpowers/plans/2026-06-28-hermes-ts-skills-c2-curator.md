@@ -270,17 +270,15 @@ a. 顶部 import 增补类型与 SkillUsage：
 import { SkillUsage, type SkillUsageEntry } from './skill-usage.js';
 ```
 
-b. 加字段并在构造函数最前面(在 `if (!existsSync(dir)) return;` 之前)初始化：
+b. 在**已有的** `private readonly dir: string;`(现 line 23)旁**新增一个**字段(不要重复 `dir`)：
 ```ts
-  private readonly dir: string;
   private readonly usage: SkillUsage;
-
-  constructor(dir: string, logger?: Logger) {
-    this.dir = dir;
-    this.usage = new SkillUsage(join(dir, '.usage.json'), logger);
-    if (!existsSync(dir)) return;
-    // ... 其余扫描逻辑不变 ...
 ```
+并在构造函数体最前面——`this.dir = dir;` 之后、`if (!existsSync(dir)) return;` 之前——**插入一行**(其余扫描逻辑保持不变)：
+```ts
+    this.usage = new SkillUsage(join(dir, '.usage.json'), logger);
+```
+(放在早返回之前是必须的:`usage` 为 `readonly` 非可选,所有返回路径都必须已赋值,即便 dir 不存在。)
 
 c. `create` 加可选第 4 参并记 provenance(身份事件用 `usage.create`)。把签名与 try 块改为：
 ```ts
@@ -330,10 +328,8 @@ git commit -m "$(printf 'feat(core): SkillStore 集成 provenance(create/edit/pa
 - Modify: `packages/core/src/skill-store.ts`
 - Test: `packages/core/src/skill-store.test.ts`
 
-- [ ] **Step 1: 写失败测试** — 追加：
+- [ ] **Step 1: 写失败测试** — 追加(`existsSync`/`join` 该测试文件已 import,直接用)：
 ```ts
-import { existsSync as fsExists } from 'node:fs'; // 若文件已 import existsSync 可复用,勿重复
-
 test('archive 移到 .archive + 移出索引 + usage.state=archived', () => {
   const store = new SkillStore(dir);
   store.create('a', SKILL('a'), undefined, { agentCreated: true });
@@ -358,8 +354,18 @@ test('archive 不存在的技能报错', () => {
   const store = new SkillStore(dir);
   expect(() => store.archive('nope')).toThrow(/不存在/);
 });
+
+test('归档后前台同名重建 → provenance 重置为用户建、不再可归档(C2)', () => {
+  const store = new SkillStore(dir);
+  store.create('reborn', SKILL('reborn'), undefined, { agentCreated: true });
+  store.archive('reborn');
+  store.create('reborn', SKILL('reborn')); // 前台重建(默认 agentCreated=false)
+  const e = store.usageEntries().find(([n]) => n === 'reborn')?.[1];
+  expect(e?.agentCreated).toBe(false);
+  expect(e?.state).toBe('active');
+});
 ```
-（顶部 `existsSync` 应已在 Task 1 引入;若无则补 `existsSync` 到现有 node:fs import,勿重复声明。删掉上面那行 `fsExists` 占位注释。）
+（`existsSync`/`join`/`SKILL` 该文件已有,直接用。）
 Run `npx vitest run skill-store` → 新增 FAIL（`archive` 不存在）。
 
 - [ ] **Step 2: 实现** — 改 `packages/core/src/skill-store.ts`：
@@ -409,42 +415,32 @@ git commit -m "$(printf 'feat(core): SkillStore.archive() + 扫描跳过 .archiv
 - Modify: `packages/core/src/index.ts`
 - Test: `packages/core/src/skill-curator.test.ts`
 
-- [ ] **Step 1: 写失败测试** — 新建 `packages/core/src/skill-curator.test.ts`：
+- [ ] **Step 1: 写失败测试** — 新建 `packages/core/src/skill-curator.test.ts`(以下即完整文件,直接照抄)：
+
+`create` 不暴露 `now` 注入(内部用默认 now),故测试用 `SkillUsage` 直接把条目时间戳改到很久以前,再让 `SkillStore` 重载——`seedAgentSkill` 助手封装了这一手法。
 ```ts
 import { test, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SkillStore } from './skill-store.js';
+import { SkillUsage } from './skill-usage.js';
 import { runCurator } from './skill-curator.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'hermes-cur-')); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
 const SKILL = (n: string) => `---\nname: ${n}\ndescription: d\n---\n\n正文`;
 const NOW = new Date('2026-06-01T00:00:00Z');
 const LONG_AGO = new Date('2026-01-01T00:00:00Z'); // 距 NOW ~151 天
 
-test('归档 agent 建且久未用的技能', () => {
-  const store = new SkillStore(dir);
-  // 用注入的 now 让 create 的时间戳落在很久以前
-  store.create('old', SKILL('old'), undefined, { agentCreated: true });
-  // 直接通过 usage 把 lastUsedAt 调到很久以前(record state 不改时间;改用再次 create 注入 now)
-  store.create('old', SKILL2 = SKILL('old')); // 见下方说明
-});
-```
-> 注:`create` 不暴露 `now` 注入(SkillStore.create 内部用默认 now)。为可控测试,**用 SkillUsage 直接构造老条目**更干净。改用如下测试(直接操作 .usage.json 经 SkillUsage,再让 SkillStore 读取):
-
-```ts
-import { SkillUsage } from './skill-usage.js';
-
-function seedAgentSkill(name: string, lastUsed: Date) {
-  // 真建技能文件(让 archive 有目录可移)
+// 建真实技能文件 + 把其 usage 条目时间戳覆盖为 lastUsed,返回重载后的 store
+function seedAgentSkill(name: string, lastUsed: Date, agentCreated = true): SkillStore {
   const s = new SkillStore(dir);
-  s.create(name, SKILL(name), undefined, { agentCreated: true });
-  // 覆盖该条目的时间戳为很久以前
+  s.create(name, SKILL(name), undefined, { agentCreated });
   const u = new SkillUsage(join(dir, '.usage.json'));
-  u.create(name, { agentCreated: true, now: lastUsed });
+  u.create(name, { agentCreated, now: lastUsed }); // create 整条覆盖,createdAt=lastUsedAt=lastUsed
   return new SkillStore(dir); // 重新加载,带老时间戳
 }
 
@@ -456,11 +452,7 @@ test('归档 agent 建且超阈值', () => {
 });
 
 test('用户建(agentCreated=false)永不归档', () => {
-  const s = new SkillStore(dir);
-  s.create('user', SKILL('user')); // 前台
-  const u = new SkillUsage(join(dir, '.usage.json'));
-  u.create('user', { agentCreated: false, now: LONG_AGO });
-  const store = new SkillStore(dir);
+  const store = seedAgentSkill('user', LONG_AGO, false);
   const rep = runCurator(store, { archiveAfterDays: 30, now: NOW });
   expect(rep.archived).toEqual([]);
 });
@@ -481,22 +473,17 @@ test('archiveAfterDays=0 关闭', () => {
 test('坏时间戳条目 → NaN → 不归档', () => {
   const s = new SkillStore(dir);
   s.create('weird', SKILL('weird'), undefined, { agentCreated: true });
+  // 直接把磁盘条目时间戳改坏,再持久化(record 就地改同一对象引用 + save)
   const u = new SkillUsage(join(dir, '.usage.json'));
-  // 手动塞坏时间戳
-  u.record('weird', { state: 'active' });
-  const entry = u.get('weird')!;
-  entry.lastUsedAt = 'not-a-date'; entry.createdAt = 'not-a-date';
-  u.create('weird', { agentCreated: true, now: NOW }); // 重写一条正常的以触发 save? 见下
-  // 简化:直接断言坏时间戳不被归档——构造一条坏的并重载
-  const u2 = new SkillUsage(join(dir, '.usage.json'));
-  const e2 = u2.get('weird')!; e2.lastUsedAt = 'bad'; e2.createdAt = 'bad';
-  u2.record('weird', {}); // 触发 save 持久化坏值
+  const e = u.get('weird')!;
+  e.lastUsedAt = 'bad';
+  e.createdAt = 'bad';
+  u.record('weird', {}); // 全 undefined opts 仍会 save,持久化坏值
   const store = new SkillStore(dir);
   const rep = runCurator(store, { archiveAfterDays: 30, now: NOW });
   expect(rep.archived).toEqual([]);
 });
 ```
-> 实现者注:坏时间戳测试如上略繁琐,可简化为「直接 new SkillUsage、`create` 后手改 entry 字段为 'bad'、`record` 触发 save、重载 SkillStore 跑 curator 断言不归档」。核心断言:`runCurator` 对 `new Date('bad').getTime()===NaN` 的条目不归档。
 
 Run `npx vitest run skill-curator` → FAIL（模块不存在）。
 
