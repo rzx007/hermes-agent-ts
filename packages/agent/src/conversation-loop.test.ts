@@ -50,6 +50,8 @@ test('单轮纯文本：无工具调用直接结束', async () => {
   expect(events.at(-1)?.type).toBe('turn_done');
   // 落库：user + assistant = 2 条
   expect(db.getMessages(s.id).length).toBe(2);
+  const done1 = events.find((e) => e.type === 'turn_done');
+  expect(done1 && done1.type === 'turn_done' ? done1.iterations : -1).toBe(0);
 });
 
 test('工具调用轮：执行工具后再产出最终回答', async () => {
@@ -67,6 +69,8 @@ test('工具调用轮：执行工具后再产出最终回答', async () => {
   expect(events.at(-1)?.type).toBe('turn_done');
   // user + assistant(toolcall) + tool + assistant(final) = 4 条
   expect(db.getMessages(s.id).length).toBe(4);
+  const done2 = events.find((e) => e.type === 'turn_done');
+  expect(done2 && done2.type === 'turn_done' ? done2.iterations : -1).toBe(1);
 });
 
 test('超过 maxIterations 产出 error', async () => {
@@ -118,6 +122,8 @@ test('单轮内多个工具调用按序执行并落库', async () => {
   expect(events.at(-1)?.type).toBe('turn_done');
   // user + assistant(2 toolcalls) + tool + tool + assistant(final) = 5 条
   expect(db.getMessages(s.id).length).toBe(5);
+  const done3 = events.find((e) => e.type === 'turn_done');
+  expect(done3 && done3.type === 'turn_done' ? done3.iterations : -1).toBe(1);
 });
 
 test('已中止的 signal 立即结束当前轮', async () => {
